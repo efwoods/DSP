@@ -5,8 +5,8 @@ import csv
 # Part 1: initialization
 
 # base url
-my_url = "https://www.newegg.com/PS4-Systems/SubCategory/ID-3102/Page-"
-#my_url = input("Enter URL to scrape: ")
+# my_url = "https://www.newegg.com/PS4-Systems/SubCategory/ID-3102/Page-"
+my_url = input("Enter URL to scrape: ")
 
 # page number to attach to the base url
 page = 1
