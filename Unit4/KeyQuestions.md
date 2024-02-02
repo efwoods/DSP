@@ -1,4 +1,6 @@
 
+## [Lending Club A](https://services.hbsp.harvard.edu/api/courses/1122752/items/119020-PDF-ENG/sclinks/b120e5540b508dfabfd526326094f712)
+## [Lending Club B](https://services.hbsp.harvard.edu/api/courses/1122752/items/119021-PDF-ENG/sclinks/4c836fd15436ffb1913c9d6905c276ca)
 
 1. Should Figel invest in LendingClub? Why or why not? 
    1. Figel has access to the company data and the ability to create models which will predict who should be given loans. Because there are $22,000,000 in loans that are did not meet the specified grade levels, there is room for her to identify a model which will appropriately accept loans and assign designated grade levels.
