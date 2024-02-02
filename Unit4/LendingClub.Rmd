@@ -442,6 +442,13 @@ test_data
 train_data
 ```
 
+```{r}
+write.csv(train_data, file = 'clean_train_loans2013_2015q1_minimalprocessing.csv')
+```
+
+```{r}
+write.csv(test_data, file = 'clean_test_loans2013_2015q1_minimalprocessing.csv')
+```
 
 
 
