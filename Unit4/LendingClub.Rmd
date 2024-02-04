@@ -665,6 +665,11 @@ tree.pred <- predict(tree.good_loan, test_data, type = "class")
 ```
 
 
+```{r}
+tree.pred[tree.pred == 0] # predictions are 1 instead of 0
+```
+
+
 ## Selecting features
 ```{r}
 # Potential Features used to predict grade: 
