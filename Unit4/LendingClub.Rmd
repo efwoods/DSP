@@ -45,7 +45,11 @@ if(!require("keras")) install.packages("keras") # Install keras for deep learnin
 if(!require("magritter")) install.packages("magritter") 
 if(!require("lubridate")) install.packages("lubridate")
 if(!require("sjmisc")) install.packages("sjmisc") # overloading is_empty
+if(!require("randomForest")) install.packages("randomForest")
+if(!require("tree")) install.packages("tree")
 
+library(randomForest)
+library(tree)
 library(sjmisc) # overloading is_empty
 library(lubridate)
 library(magrittr)
@@ -81,9 +85,284 @@ custom_lightblue = "#34ABEB"
 custom_red = "#a60808"
 ```
 
+## Function Definitions
 ```{r include=FALSE}
 f_print <- function(string){
   cat(str_wrap(string = string, width = 80, indent = 0, exdent = 0, whitespace_only = TRUE))
+}
+```
+
+```{r}
+# Identifying All Character Values
+# """
+# Purpose: This function will identify all character types within a set of data
+# Parameters: 
+#             data: This is expected to be a dataframe of training or test data.
+# Returns: This function returns a collection of names of the predictors that 
+#          are of type character.
+# """
+identify_character_values <- function(data){
+  data_chr <- character()
+  for (i in seq_along(names(data))){
+    names_data <- names(data)
+    if(is.character(data[[i]])){
+      data_chr[[i]] <- names_data[i]
+    }
+  }  
+  return(data_chr)
+}
+```
+
+```{r}
+# """
+# Purpose: This function will clean character data. The data that needs to be 
+#          formatted as numeric will be cleaned of extraneous characters before
+#          converting the data to a numeric data type. It will check columns for
+#          non-unique values and drop those columns from the dataframe. It 
+#          verifies that all values of the next_payment_d column are empty, and
+#          if so, the column is dropped from the dataframe. The proportion of 
+#          missing data is then calculated and character columns are converted
+#          to factors. The url & description columns are left as of type 
+#          character. This function is meant to be called before identifying 
+#          the proportion of missing numeric values. 
+# 
+# Parameters: 
+#             data: This is expected to be a dataframe of training or test data.
+#             verbose: This will allow print statements to be suppressed when 
+#                      FALSE. Default is set to TRUE.
+# Returns: This function returns a list containing the cleaned dataframe, and
+#          a collection of the character columns that were dropped.
+# """
+clean_char_data <- function(data, verbose = TRUE){
+  # Identify character columns
+  data_character_columns <- character()
+  data_character_columns_index <- 1
+  for (i in seq_along(names(data))){
+    names_data <- names(data)
+    if(is.character(data[[i]])){
+      data_character_columns[[data_character_columns_index]] <- names_data[i]
+      data_character_columns_index <- data_character_columns_index + 1
+    }
+  }
+  
+  # Transform character data to numeric in months
+  data[data_character_columns]['int_rate'] <- str_replace(data[data_character_columns]$int_rate, "\\%", "")
+  data[data_character_columns]['int_rate'] <- str_replace(data[data_character_columns]$int_rate, "[ ]", "")
+  data[data_character_columns]['int_rate'] <- as.numeric(data[data_character_columns]$int_rate)  
+
+  # data[data_character_columns]['term'] <- str_replace(data[data_character_columns]$term, "[ ]+(months)", "")
+  # data[data_character_columns]['term'] <- str_replace(data[data_character_columns]$term, "[ ]", "")
+  data[data_character_columns]['term'] <- as.factor(data[data_character_columns]$term)
+
+  data[data_character_columns]['revol_util'] <- str_replace(data[data_character_columns]$revol_util, "\\%", "")
+  data[data_character_columns]['revol_util'] <- as.numeric(data[data_character_columns]$revol_util)
+  
+  # Checking for columns with non-unique values
+  data_character_columns_to_drop <- character()
+  column_count_to_drop = 1
+  for (i in seq_along(data_character_columns)){
+    current_col <- data_character_columns[i]  
+      
+    if(length(unique(as.factor(data[,data_character_columns[i]]))) == 1){
+      data_character_columns_to_drop[column_count_to_drop] <- data_character_columns[i]
+      column_count_to_drop = column_count_to_drop + 1
+    }
+  }
+  
+  if(verbose){
+    print("Dropping columns due to non-unique values:")
+    print(data_character_columns_to_drop)
+  }
+  
+  # Checking for non-empty strings
+  found_non_empty_string <- FALSE
+  for (i in length(data[data_character_columns]$next_pymnt_d)){
+    if (!(is_empty(data[data_character_columns]$next_pymnt_d[[i]]))){
+      found_non_empty_string <- TRUE
+      print(data[data_character_columns]$next_pymnt_d[[i]])
+      break
+    }
+  }
+  if(!found_non_empty_string) {
+    data_character_columns_to_drop[column_count_to_drop] <- 'next_pymnt_d'
+    column_count_to_drop <- column_count_to_drop + 1
+  }
+  
+  # Drop columns that have only singly unique values
+  data %<>% select(everything(), -data_character_columns_to_drop)
+  
+  # Mutate character data to factors
+  data %<>% mutate_if(is.character, as.factor)
+  
+  # Retain url & desc as character data
+  data <- data %>% mutate(url = as.character(url)) %>% mutate(desc = as.character(desc))
+  
+  result <- list(data, data_character_columns_to_drop)
+  return(result) 
+}
+```
+
+```{r}
+# identify the proportion of missing values
+# """
+# Purpose: This function will identify the proportion of missing values in a
+#          dataframe. It will drop values that have more than 10% missing 
+#          values, and otherwise impute numeric values with the mean. The 
+#          cleaned data is then included as the first index in the returned
+#          list.
+# Parameters: 
+#             data: This is expected to be a dataframe of training or test data.
+#             verbose: This will print the column names and their proportions of
+#                      missing values.
+# Returns: This function returns a list of proportions of missing data for
+#          each predictor in the input dataframe, along with lists of suggested
+#          columns to drop given all missing data, columns to drop given more 
+#          than 10% missing data, & columns to impute given less than or equal 
+#          to 10% missing data. The cleaned dataframe is returned as the first
+#          item in the resulting list.
+# """
+identify_proportion_NA <- function(data, verbose=TRUE){
+  names_data <- names(data)
+  proportion_missing <- c(integer())
+  for (i in seq_along(data)){
+      if (is.numeric(data[,names_data[i]]) | is.logical(data[,names_data[i]])){
+        proportion_missing[i] <- ((sum(is.na(data[,names_data[i]])) / (length(data[,names_data[i]]))) * 100)
+      } else if(is.character(data[,names_data[i]]) | is.factor(data[,names_data[i]])) {
+        proportion_missing[i] <- ((length(data[data[names_data[i]] == "", names_data[i]]) / length(data[,names_data[i]])) * 100)
+      } else {
+        if(verbose){
+          print("Warning: unhandled data type when calculating missing proportion.")
+          cat("\n")
+          f_print(sprintf("index: %0.0f", i))
+          cat("\n")
+          f_print(sprintf("Column: %s", names_data[i]))
+          cat("\n")  
+        }
+      }
+  }
+  if(verbose==TRUE){
+    print("Columns to drop:")
+    cat("\n")  
+  }
+  columns_to_drop_100_missing <- character()
+  for (i in seq_along(data)){
+    if(proportion_missing[i] == 100){
+      if(names_data[i] != "desc"){
+        columns_to_drop_100_missing[i] <- names_data[i]
+      }
+      if(verbose == TRUE) {
+        
+        print(names_data[i])
+        print(proportion_missing[i])
+        cat("\n")  
+      }
+    }
+  }
+
+  if(verbose == TRUE){
+    print("Columns to Impute:")
+    cat("\n")  
+  }  
+  columns_to_impute <- character()
+  for (i in seq_along(data)){
+    if(proportion_missing[i] <= 10 & proportion_missing[i] > 0){
+      if(names_data[i] != "desc"){
+        columns_to_impute[i] <- names_data[i]
+      }
+      if(verbose == TRUE){
+        print(names_data[i])
+        print(proportion_missing[i])
+        cat("\n")  
+      }
+    }
+  }
+
+  if(verbose == TRUE){
+    print("Columns less than 100% to drop:")
+    cat("\n")  
+  } 
+  
+  columns_to_drop_less_than_100 <- character()
+  for (i in seq_along(data)){
+    if(proportion_missing[i] > 10 & proportion_missing[i] < 100 ){
+      if(names_data[i] != "desc"){
+        columns_to_drop_less_than_100[i] <- names_data[i]
+      }
+      if(verbose == TRUE){
+        print(names_data[i])
+        print(proportion_missing[i])
+        cat("\n")  
+      }
+    }
+  }
+  
+  columns_to_drop_100_missing <- columns_to_drop_100_missing[!is.na(columns_to_drop_100_missing)]
+  columns_to_impute <- columns_to_impute[!is.na(columns_to_impute)]
+  columns_to_drop_less_than_100 <-columns_to_drop_less_than_100[!is.na(columns_to_drop_less_than_100)]
+  
+  # Removing columns with all missing values.
+  if(verbose == TRUE){
+    cat("\n")
+    print("Dropping columns with all missing values:")
+    cat("\n")
+    print(columns_to_drop_100_missing)
+  }
+  data %<>% select(everything(),-columns_to_drop_100_missing)
+
+  # Removing columns with values with greater than 10% missing values.
+  if(verbose == TRUE){
+    cat("\n")
+    print("Dropping columns with greater than 10% missing values:")
+    cat("\n")
+    print(columns_to_drop_less_than_100)
+  }
+
+  data %<>% select(everything(),-columns_to_drop_less_than_100)
+  
+  # Imputing Missing Data
+  if(verbose){
+    cat("\n")
+    print("Imputing Columns:")
+    cat("\n")
+    print(columns_to_impute)
+  }
+  for (i in seq_along(columns_to_impute))
+    if(is.numeric(data[,columns_to_impute[i]])){
+      data[,columns_to_impute[i]]
+      imputed_mean <- mean(data[,columns_to_impute[i]], na.rm = TRUE)
+      data[, columns_to_impute[i]][is.na(data[,columns_to_impute[i]])] <- imputed_mean
+    } else {
+      sprintf("Warning: unhandled column to impute is non-numeric: %s",columns_to_impute[i])
+    }
+
+  results <- list(data, columns_to_drop_100_missing, columns_to_drop_less_than_100, columns_to_impute, proportion_missing, names_data)
+  return(results)
+}
+
+# id_prop_NA_list <- identify_proportion_NA(train_data)
+```
+
+```{r}
+# Describe the proportion of a single missing value
+# """
+# Purpose: This function will identify the proportion of missing values given 
+#          the cleaned dataframe from the function "identify_proportion_NA" and
+#          the string containing the the variable in question. This function is
+#          dependent upon the function "f_print" for custom printing.
+#
+# Parameters: 
+#             proportion_missing_df: This is expected to be a dataframe returned
+#                                    from the function "identify_proportion_NA".
+#             variable_to_id: This is a string within the dataframe which is of
+#                             interest.
+# Returns: This function prints the requested variable and the proprotion 
+#          missing for that variable.
+# """
+describe_proportion_missing <- function(proportion_missing_df, variable_to_id){
+for (i in seq_along(proportion_missing_df[[6]])){
+  if(proportion_missing_df[[6]][i] == variable_to_id)
+    f_print(sprintf("%s: %0.3f", proportion_missing_df[[6]][i], proportion_missing_df[[5]][i]))
+  }  
 }
 ```
 
@@ -93,344 +372,174 @@ test_data <- read.csv('./test_loans2013_2015q1_minimalprocessing.csv')
 ```
 
 ## Cleaning Training Data
+### Cleaning Character data
 ```{r}
-sum(is.na(train_data))
-```
-```{r}
-dim(train_data)
-```
-
-```{r}
-names(train_data)
-```
-
-```{r}
-head(train_data)
-```
-
-```{r}
-# Identifying All Character Values
-train_data_chr <- character()
-for (i in seq_along(names(train_data))){
-  names_train_data <- names(train_data)
-  if(is.character(train_data[[i]])){
-    train_data_chr[[i]] <- names_train_data[i]
-  }
-}
-train_data_chr <- train_data_chr[!is.na(train_data_chr)]
-```
-
-```{r}
-train_data[train_data_chr]$int_rate <- str_replace(train_data[train_data_chr]$int_rate, "\\%", "")
-train_data[train_data_chr]$int_rate <- str_replace(train_data[train_data_chr]$int_rate, "[ ]", "")
-train_data[train_data_chr]$int_rate <- as.numeric(train_data[train_data_chr]$int_rate)
-```
-
-```{r}
-train_data[train_data_chr]$term <- str_replace(train_data[train_data_chr]$term, "[ ]+(months)", "")
-train_data[train_data_chr]$term <- str_replace(train_data[train_data_chr]$term, "[ ]", "")
-train_data[train_data_chr]$term <- as.numeric(train_data[train_data_chr]$term)
-```
-
-```{r}
-train_data[train_data_chr]$grade <- as.factor(train_data[train_data_chr]$grade)
-```
-
-```{r}
-train_data[train_data_chr]$sub_grade <- as.factor(train_data[train_data_chr]$sub_grade)
-```
-
-```{r}
-# train_data[train_data_chr]$emp_length <- str_replace(train_data[train_data_chr]$emp_length, "[ ](years)", "")
-train_data[train_data_chr]$emp_length <- as.factor(train_data[train_data_chr]$emp_length)
-```
-
-```{r}
-train_data[train_data_chr]$home_ownership <- as.factor(train_data[train_data_chr]$home_ownership)
-```
-
-```{r}
-train_data[train_data_chr]$verification_status <- as.factor(train_data[train_data_chr]$verification_status)
-```
-
-```{r}
-train_data[train_data_chr]$purpose <- as.factor(train_data[train_data_chr]$purpose)
-```
-
-```{r}
-train_data[train_data_chr]$title <- as.factor(train_data[train_data_chr]$title)
-```
-
-```{r}
-train_data[train_data_chr]$addr_state <- as.factor(train_data[train_data_chr]$addr_state)
-```
-
-```{r}
-train_data[train_data_chr]$earliest_cr_line <- as.factor(train_data[train_data_chr]$earliest_cr_line)
-```
-
-```{r}
-train_data[train_data_chr]$revol_util <- str_replace(train_data[train_data_chr]$revol_util, "\\%", "")
-```
-
-```{r}
-train_data[train_data_chr]$revol_util <- as.numeric(train_data[train_data_chr]$revol_util)
-```
-
-```{r}
-train_data[train_data_chr]$initial_list_status <- as.factor(train_data[train_data_chr]$initial_list_status)
-```
-
-```{r}
-train_data[train_data_chr]$last_pymnt_d <- as.factor(train_data[train_data_chr]$last_pymnt_d)
-```
-
-```{r}
-# Checking for non-empty strings
-j <- 0
-for (i in length(train_data[train_data_chr]$next_pymnt_d)){
-  if (!(is_empty(train_data[train_data_chr]$next_pymnt_d[[i]]))){
-    j <- 1
-    print(train_data[train_data_chr]$next_pymnt_d[[i]])
-    break
-  }
-}
-```
-
-```{r}
-train_data[train_data_chr]$last_credit_pull_d <- as.factor(train_data[train_data_chr]$last_credit_pull_d)
-```
-
-```{r}
-# There are no unique values
-# unique(as.factor(train_data[train_data_chr]$application_type))
-```
-
-```{r}
-# There are no unique values
-# unique(as.factor(train_data[train_data_chr]$hardship_flag))
-```
-
-```{r}
-# There are no unique values
-# unique(as.factor(train_data[train_data_chr]$disbursement_method))
-```
-
-```{r}
-train_data[train_data_chr]$debt_settlement_flag <- as.factor(train_data[train_data_chr]$debt_settlement_flag)
-```
-
-```{r}
-train_data[train_data_chr]$loan_status <- as.factor(train_data[train_data_chr]$loan_status)
-```
-
-```{r}
-train_data[train_data_chr]$debt_settlement_flag_date <- as.factor(train_data[train_data_chr]$debt_settlement_flag_date)
-```
-
-```{r}
-train_data[train_data_chr]$settlement_status <- as.factor(train_data[train_data_chr]$settlement_status)
-```
-
-```{r}
-train_data[train_data_chr]$settlement_date <- as.factor(train_data[train_data_chr]$settlement_date)
-```
-
-```{r}
-# Removing variables with no values, single values, mostly missing values, or no pertinent content
-train_data %<>% select(everything(), -member_id, -id, -emp_title, -pymnt_plan, -url, -desc, -zip_code, -next_pymnt_d, -application_type, -hardship_flag, -hardship_type, -hardship_reason, -hardship_status, -hardship_start_date, -hardship_end_date, -payment_plan_start_date, -hardship_loan_status, -disbursement_method, -mths_since_rcnt_il, -settlement_amount, -settlement_percentage, -settlement_term, -revol_bal_joint, -mths_since_last_delinq, -mths_since_last_record, -mths_since_last_major_derog, -annual_inc_joint, -dti_joint, -open_acc_6m, -open_act_il, -open_il_12m, -open_il_24m, -total_bal_il, -il_util, -open_rv_12m, -open_rv_24m, -max_bal_bc, -all_util, -inq_fi, -total_cu_tl, -inq_last_12m, -mths_since_recent_bc_dlq, -mths_since_recent_revol_delinq, -sec_app_fico_range_low, -sec_app_fico_range_high, -sec_app_earliest_cr_line, -sec_app_inq_last_6mths, -sec_app_mort_acc, -sec_app_open_acc)
-```
-
-```{r}
-train_data %<>% select(everything(), -verification_status_joint, -sec_app_revol_util, -sec_app_open_act_il, -sec_app_num_rev_accts, -sec_app_chargeoff_within_12_mths, -sec_app_collections_12_mths_ex_med, -sec_app_mths_since_last_major_derog, -deferral_term, -hardship_amount, -hardship_length, -hardship_last_payment_amount, -hardship_payoff_balance_amount, -orig_projected_additional_accrued_interest, -hardship_dpd)
-```
-
-```{r}
-train_data %<>% select(everything(), -debt_settlement_flag_date, -settlement_status, -settlement_date)
-```
-
-```{r}
-train_data <- drop_na(train_data)
-```
-
-```{r}
-# loan_status & good_loan are not present in the test dataset
-train_data %<>% select(everything(), -loan_status, -good_loan)
-```
-
-
-```{r}
-train_data$issue_d <- as.factor(train_data$issue_d)
-```
-
-
-```{r}
-# All data is present & transformed into either numeric or factors
+training_clean_result <- clean_char_data(train_data)
+train_data <- training_clean_result[[1]]
 train_data
 ```
 
-## Cleaning Test Data
 ```{r}
-test_data
+# Identify columns with missing values in the training data
+training_id_prop_NA_list <- identify_proportion_NA(train_data, verbose=FALSE)
 ```
 
 ```{r}
-test_data_chr <- character()
-for (i in seq_along(names(test_data))){
-  names_train_data <- names(test_data)
-  if(is.character(test_data[[i]])){
-    test_data_chr[[i]] <- names_train_data[i]
-  }
-}
-test_data_chr <- test_data_chr[!is.na(test_data_chr)]
-
-```
-
-
-
-```{r}
-test_data[test_data_chr]$int_rate <- str_replace(test_data[test_data_chr]$int_rate, "\\%", "")
-test_data[test_data_chr]$int_rate <- str_replace(test_data[test_data_chr]$int_rate, "[ ]", "")
-test_data[test_data_chr]$int_rate <- as.numeric(test_data[test_data_chr]$int_rate)
+# Identify the factors in the training data
+factors <- train_data %>% select_if(is.factor)
+names_factors <- names(factors)
 ```
 
 ```{r}
-# test_data[test_data_chr]
-```
-
-```{r}
-test_data[test_data_chr]$grade <- as.factor(test_data[test_data_chr]$grade)
-```
-
-```{r}
-test_data[test_data_chr]$sub_grade <- as.factor(test_data[test_data_chr]$sub_grade)
-```
-
-```{r}
-# test_data[test_data_chr]$emp_length <- str_replace(test_data[test_data_chr]$emp_length, "[ ](years)", "")
-test_data[test_data_chr]$emp_length <- as.factor(test_data[test_data_chr]$emp_length)
-```
-
-```{r}
-test_data[test_data_chr]$home_ownership <- as.factor(test_data[test_data_chr]$home_ownership)
-```
-
-```{r}
-test_data[test_data_chr]$verification_status <- as.factor(test_data[test_data_chr]$verification_status)
-```
-
-```{r}
-test_data[test_data_chr]$purpose <- as.factor(test_data[test_data_chr]$purpose)
-```
-
-```{r}
-test_data[test_data_chr]$title <- as.factor(test_data[test_data_chr]$title)
-```
-
-```{r}
-test_data[test_data_chr]$addr_state <- as.factor(test_data[test_data_chr]$addr_state)
-```
-
-```{r}
-test_data[test_data_chr]$earliest_cr_line <- as.factor(test_data[test_data_chr]$earliest_cr_line)
-```
-
-```{r}
-test_data[test_data_chr]$revol_util <- str_replace(test_data[test_data_chr]$revol_util, "\\%", "")
-```
-
-```{r}
-test_data[test_data_chr]$revol_util <- as.numeric(test_data[test_data_chr]$revol_util)
-```
-
-```{r}
-test_data[test_data_chr]$initial_list_status <- as.factor(test_data[test_data_chr]$initial_list_status)
-```
-
-
-```{r}
-# Checking for non-empty strings
-j <- 0
-for (i in length(test_data[test_data_chr]$next_pymnt_d)){
-  if (!(is_empty(test_data[test_data_chr]$next_pymnt_d[[i]]))){
-    j <- 1
-    print(test_data[test_data_chr]$next_pymnt_d[[i]])
-    break
-  }
+# Identify the proportion of missing values amongst the factors
+for (i in seq_along(names_factors)){
+  describe_proportion_missing(training_id_prop_NA_list, names_factors[i])
+  cat("\n")
 }
 ```
 
 ```{r}
-# There are no unique values
-# unique(as.factor(test_data[test_data_chr]$application_type))
+# Potential categories for sentiment analysis
+# emp_title
+# title
+# url
+# desc
+
+# Potential categories for imputation using knn or kmeans
+# emp_length
+# last_credit_pull_d
+# last_pymnt_d
+
+# Only emp_length is in the test data
 ```
 
 ```{r}
-# There are no unique values
-# unique(as.factor(test_data[test_data_chr]$hardship_flag))
+# Update cleaned data
+train_data <- training_id_prop_NA_list[[1]]
 ```
 
 ```{r}
-# There are no unique values
-# unique(as.factor(test_data[test_data_chr]$disbursement_method))
+# Dropping emp_title, title, url, & description due to irrelevant content
+train_data %<>% select(everything(), -emp_title, -title, -url, -desc)
+```
+
+### Impute missing values using clustering techniques
+```{r}
+# emp_length
+# last_credit_pull_d
+# last_pymnt_d
 ```
 
 ```{r}
-test_data[test_data_chr]$debt_settlement_flag <- as.factor(test_data[test_data_chr]$debt_settlement_flag)
+# Dropping emp_length, last_credit_pull_d, & last_pymnt_d because not in test data
+train_data %<>% select(everything(), -emp_length, -last_credit_pull_d, -last_pymnt_d)
 ```
 
 ```{r}
-test_data[test_data_chr]$debt_settlement_flag_date <- as.factor(test_data[test_data_chr]$debt_settlement_flag_date)
+# Inverting the good_loan logic to be intuitive
+train_data$good_loan <- (as.numeric(train_data$loan_status) - 1) 
 ```
 
 ```{r}
-test_data[test_data_chr]$settlement_status <- as.factor(test_data[test_data_chr]$settlement_status)
+# Dropping redundant loan_status col
+train_data %<>% select(everything(), -loan_status)
 ```
 
 ```{r}
-test_data[test_data_chr]$settlement_date <- as.factor(test_data[test_data_chr]$settlement_date)
-```
-
-```{r}
-# Removing variables with no values, single values, mostly missing values, or no pertinent content
-test_data %<>% select(everything(), -member_id, -id, -emp_title, -pymnt_plan, -url, -desc, -zip_code, -next_pymnt_d, -application_type, -hardship_flag, -hardship_type, -hardship_reason, -hardship_status, -hardship_start_date, -hardship_end_date, -payment_plan_start_date, -hardship_loan_status, -disbursement_method, -mths_since_rcnt_il, -settlement_amount, -settlement_percentage, -settlement_term, -revol_bal_joint, -mths_since_last_delinq, -mths_since_last_record, -mths_since_last_major_derog, -annual_inc_joint, -dti_joint, -open_acc_6m, -open_act_il, -open_il_12m, -open_il_24m, -total_bal_il, -il_util, -open_rv_12m, -open_rv_24m, -max_bal_bc, -all_util, -inq_fi, -total_cu_tl, -inq_last_12m, -mths_since_recent_bc_dlq, -mths_since_recent_revol_delinq, -sec_app_fico_range_low, -sec_app_fico_range_high, -sec_app_earliest_cr_line, -sec_app_inq_last_6mths, -sec_app_mort_acc, -sec_app_open_acc)
-```
-
-```{r}
-test_data %<>% select(everything(), -verification_status_joint, -sec_app_revol_util, -sec_app_open_act_il, -sec_app_num_rev_accts, -sec_app_chargeoff_within_12_mths, -sec_app_collections_12_mths_ex_med, -sec_app_mths_since_last_major_derog, -deferral_term, -hardship_amount, -hardship_length, -hardship_last_payment_amount, -hardship_payoff_balance_amount, -orig_projected_additional_accrued_interest, -hardship_dpd)
-```
-
-```{r}
-test_data %<>% select(everything(), -debt_settlement_flag_date, -settlement_status, -settlement_date)
-```
-
-```{r}
-near(length(names(test_data)), length(names(train_data)))
-```
-
-```{r}
-names(test_data)
-```
-
-```{r}
-names(train_data)
-```
-
-```{r}
-# test_data <- drop_na(test_data)
+train_data
 ```
 
 
+## Cleaning the Test Data
+### Cleaning Character Data
+
 ```{r}
-# test_data$funded_amnt <- as.numeric(test_data$funded_amnt)
-# test_data$funded_amnt_inv <- as.numeric(test_data$funded_amnt_inv)
-# test_data$term <- as.numeric(test_data$term)
-# test_data$installment <- as.numeric(test_data$installment)
-test_data$issue_d <- as.factor(test_data$issue_d)
-# test_data$out_prncp <- as.numeric(test_data$out_prncp)
-# test_data$out_prncp_inv <- as.numeric(test_data$out_prncp_inv)
-# test_data$total_pymnt <- as.numeric(test_data$total_pymnt)
-test_data %<>% mutate_if(is.logical, as.numeric)
+test_clean_result <- clean_char_data(test_data)
+```
+
+```{r}
+test_data <- test_clean_result[[1]]
+```
+
+```{r}
+# Identify columns with missing values in the test data
+test_id_prop_NA_list <- identify_proportion_NA(test_data, verbose=FALSE)
+```
+
+```{r}
+# Identify the factors in the test data
+factors <- test_data %>% select_if(is.factor)
+names_factors <- names(factors)
+```
+
+```{r}
+# Identify the proportion of missing values amongst the factors
+for (i in seq_along(names_factors)){
+  describe_proportion_missing(test_id_prop_NA_list, names_factors[i])
+  cat("\n")
+}
+```
+
+```{r}
+# Potential to impute values using clustering techniques and data-preprocessing
+# emp_title
+
+# Potential to impute values using clustering techniques
+# emp_length
+```
+
+```{r}
+test_data <- test_id_prop_NA_list[[1]]
+```
+
+### Impute emp_title using clustering techniques
+```{r}
+# Imputing emp_length using clustering techniques
+# test_data$emp_title
+```
+
+```{r}
+# Dropping emp_title & emp_length to create classifier; able to compare results after imputation later
+test_data %<>% select(everything(), -emp_title, -emp_length, -title, -url, -desc)
+```
+
+```{r}
+(test_data)
+# (train_data)
+```
+
+```{r}
+# Test values that were dropped for quantity of missing values or irrelevant content (title, url, desc, emp_title are irrelevant)
+dropped_test_values <- c(test_id_prop_NA_list[[2]], test_id_prop_NA_list[[3]], "emp_title", "emp_length", "title", "url", "desc")
+dropped_training_values <- c(training_id_prop_NA_list[[2]], training_id_prop_NA_list[[3]], "emp_title", "emp_length", "last_credit_pull_d", "last_pymnt_d", "title", "url", "desc")
+```
+
+```{r}
+length(dropped_training_values)
+length(dropped_test_values)
+```
+
+```{r}
+# Verifying The length of training is equal to test
+dropped_test_values_only <- (dropped_test_values[!(dropped_test_values %in% dropped_training_values)]) # values that were dropped only in test
+
+# dropped_test_values[(dropped_test_values %in% dropped_training_values)] # values that were dropped in both training & test
+# dropped_training_values[!(dropped_training_values %in% dropped_test_values)] # unique dropped training values
+```
+
+
+```{r}
+values_not_in_train_data <- c("pymnt_plan", "disbursement_method")
+dropped_test_values_only <- dropped_test_values_only[!(dropped_test_values_only %in% values_not_in_train_data)]
+
+train_data %<>% select(everything(), -dropped_test_values_only)
+```
+
+```{r}
+length(names(train_data))
+length(names(test_data))
+
+# test_data
 ```
 
 ```{r}
@@ -443,14 +552,190 @@ train_data
 ```
 
 ```{r}
-write.csv(train_data, file = 'clean_train_loans2013_2015q1_minimalprocessing.csv')
+# write.csv(train_data, file = 'clean_train_loans2013_2015q1_minimalprocessing.csv')
 ```
 
 ```{r}
-write.csv(test_data, file = 'clean_test_loans2013_2015q1_minimalprocessing.csv')
+# write.csv(test_data, file = 'clean_test_loans2013_2015q1_minimalprocessing.csv')
 ```
 
 
+# Decision Tree Classifier
 
+```{r}
+train_data_factors <- train_data %>% select_if(is.factor)
+names_train_data_factors <- names(train_data_factors)
+
+test_data_factors <- test_data %>% select_if(is.factor)
+names_test_data_factors <- names(test_data_factors)
+```
+
+```{r}
+# Factor predictors must have at most 32 levels; encoding large factors as numeric
+for (i in seq_along(names_train_data_factors)){
+  print(names_train_data_factors[i])
+  print(length(levels(train_data[,names_train_data_factors[i]])))
+  if(length(levels(train_data[,names_train_data_factors[i]])) > 32){
+    train_data[,names_train_data_factors[i]] <- as.numeric(train_data[,names_train_data_factors[i]])
+  }
+}
+```
+
+
+```{r}
+# Factor predictors must have at most 32 levels; encoding large factors as numeric
+for (i in seq_along(names_test_data_factors)){
+  print(names_test_data_factors[i])
+  print(length(levels(test_data[,names_test_data_factors[i]])))
+  if(length(levels(test_data[,names_test_data_factors[i]])) > 32){
+    test_data[,names_test_data_factors[i]] <- as.numeric(test_data[,names_test_data_factors[i]])
+  }
+}
+
+```
+
+```{r}
+# Scaling numerically encoded factors between 0 and 1
+train_data_max.sub_grade <- which.max(train_data$sub_grade)
+train_data_max.zip_code <- which.max(train_data$zip_code)
+train_data_max.addr_state <- which.max(train_data$addr_state)
+train_data_max.earliest_cr_line <-  which.max(train_data$earliest_cr_line)
+
+train_data$sub_grade <- train_data$sub_grade / train_data_max.sub_grade
+train_data$zip_code <- train_data$zip_code / train_data_max.zip_code
+train_data$addr_state <- train_data$addr_state / train_data_max.addr_state
+train_data$earliest_cr_line <- train_data$earliest_cr_line / train_data_max.earliest_cr_line
+
+# train_data$sub_grade
+# train_data$zip_code
+# train_data$addr_state
+# train_data$earliest_cr_line
+```
+
+```{r}
+# Scaling test data 
+test_data_max.sub_grade <- which.max(test_data$sub_grade)
+test_data_max.zip_code <- which.max(test_data$zip_code)
+test_data_max.addr_state <- which.max(test_data$addr_state)
+test_data_max.earliest_cr_line <-  which.max(test_data$earliest_cr_line)
+
+test_data$sub_grade <- test_data$sub_grade / test_data_max.sub_grade
+test_data$zip_code <- test_data$zip_code / test_data_max.zip_code
+test_data$addr_state <- test_data$addr_state / test_data_max.addr_state
+test_data$earliest_cr_line <- test_data$earliest_cr_line / test_data_max.earliest_cr_line
+```
+
+
+```{r}
+# Treating good_loan as a factor to create a classification tree
+train_data$good_loan <- as.factor(train_data$good_loan)
+```
+
+
+```{r}
+set.seed(42)
+tree.good_loan <- tree(good_loan ~ ., data = train_data)
+summary(tree.good_loan)
+```
+
+
+```{r}
+plot(tree.good_loan)
+text(tree.good_loan, pretty = 0)
+```
+
+
+```{r}
+# train_data$sub_grade[1]
+0.0402098 * train_data_max.sub_grade
+```
+
+
+```{r}
+test_data$sub_grade
+```
+
+
+```{r}
+tree.pred <- predict(tree.good_loan, test_data, type = "class")
+
+# table(tree.pred, High.test)
+
+# f_print(sprintf("The test accuracy of predicted carseats sales greater than 8 using the fitted classification tree is: %0.3f%%.", ((79 + 62) / 200) * 100))
+```
+
+
+## Selecting features
+```{r}
+# Potential Features used to predict grade: 
+ # num_tl_120dpd_2m, delinq_2yrs, delinq_amnt, num_accts_ever_120_pd, acc_now_delinq, dti
+# 
+# selected_model_test <- test_data %>% select(num_accts_ever_120_pd, delinq_2yrs, delinq_amnt, num_accts_ever_120_pd, acc_now_delinq, dti, grade)
+# selected_model_train <- train_data %>% select(num_accts_ever_120_pd, delinq_2yrs, delinq_amnt, num_accts_ever_120_pd, acc_now_delinq, dti, grade)
+# ```
+# 
+# ```{r}
+# write.csv(selected_model_train, file = 'selected_model_train.csv')
+# write.csv(selected_model_test, file = 'selected_model_test.csv')
+```
+
+```{r}
+# Identifying outliers & High leverage values
+```
+
+
+```{r}
+# Fitting a lasso regression to see which predictors may be eliminated.
+```
+
+
+```{r}
+# x_train <- train_data %>% select(everything(), -grade)
+# y_train <- train_data %>% select(grade)
+# 
+# x_test <- test_data %>% select(everything(), -grade)
+# y_test <- test_data %>% select(grade)
+# ```
+# 
+# ```{r}
+# x_train_numeric <- x_train %>% mutate_if(is.factor, as.numeric)
+# y_train_numeric <- y_train %>% mutate_if(is.factor, as.numeric)
+# x_test_numeric <- x_test %>% mutate_if(is.factor, as.numeric)
+# y_test_numeric <- y_test %>% mutate_if(is.factor, as.numeric)
+```
+
+```{r}
+# x_train_numeric
+```
+
+
+```{r}
+x <- model.matrix(grade ~ ., data = train_data)[, -1] # -1 removes the intercept
+y <- train_data$grade
+```
+
+
+```{r}
+set.seed(42)
+grid <- 10^seq(10, -2, length = 100)
+lasso.mod <- glmnet(x_train_numeric, y_train_numeric, alpha = 1, lambda = grid)
+plot(lasso.mod)
+```
+
+```{r}
+set.seed(1)
+cv.out <- cv.glmnet(x[train, ], y[train], alpha = 1)
+plot(cv.out)
+cv.out$lambda.min
+lasso.pred <- predict(lasso.mod, s = cv.out$lambda.min, newx = x[test, ])
+mean((lasso.pred - y.test)^2)
+```
+
+
+```{r}
+ out <- glmnet(x, y, lambda = grid, alpha = 1)
+lasso.coef <- predict(out, s = cv.out$lambda.min, type = "coefficients")[1:20, ]
+lasso.coef
+```
 
 
