@@ -9,13 +9,13 @@ output: github_document
 knitr::opts_chunk$set(echo = FALSE)
 knitr::opts_chunk$set(warning = FALSE)
 knitr::opts_chunk$set(message = FALSE)
-knitr::opts_chunk$set(fig.width = 6)
-knitr::opts_chunk$set(fig.asp = 0.618)
-knitr::opts_chunk$set(out.width = "70%")
-knitr::opts_chunk$set(fig.align = "center")
-knitr::opts_chunk$set(
-  comment = ""
-)
+# knitr::opts_chunk$set(fig.width = 6)
+# knitr::opts_chunk$set(fig.asp = 0.618)
+# knitr::opts_chunk$set(out.width = "70%")
+# knitr::opts_chunk$set(fig.align = "center")
+# knitr::opts_chunk$set(
+#   comment = ""
+# )
 ```
 
 ```{r message=FALSE, include=FALSE}
@@ -47,7 +47,9 @@ if(!require("lubridate")) install.packages("lubridate")
 if(!require("sjmisc")) install.packages("sjmisc") # overloading is_empty
 if(!require("randomForest")) install.packages("randomForest")
 if(!require("tree")) install.packages("tree")
+if(!require("rfUtilities")) install.packages("rfUtilities")
 
+library(rfUtilities)
 library(randomForest)
 library(tree)
 library(sjmisc) # overloading is_empty
@@ -414,6 +416,10 @@ for (i in seq_along(names_factors)){
 ```
 
 ```{r}
+# train_data$emp_title
+```
+
+```{r}
 # Update cleaned data
 train_data <- training_id_prop_NA_list[[1]]
 ```
@@ -428,6 +434,10 @@ train_data %<>% select(everything(), -emp_title, -title, -url, -desc)
 # emp_length
 # last_credit_pull_d
 # last_pymnt_d
+```
+
+```{r}
+# train_data$emp_length
 ```
 
 ```{r}
@@ -449,10 +459,8 @@ train_data %<>% select(everything(), -loan_status)
 train_data
 ```
 
-
 ## Cleaning the Test Data
 ### Cleaning Character Data
-
 ```{r}
 test_clean_result <- clean_char_data(test_data)
 ```
@@ -538,7 +546,6 @@ train_data %<>% select(everything(), -dropped_test_values_only)
 ```{r}
 length(names(train_data))
 length(names(test_data))
-
 # test_data
 ```
 
@@ -559,9 +566,8 @@ train_data
 # write.csv(test_data, file = 'clean_test_loans2013_2015q1_minimalprocessing.csv')
 ```
 
-
 # Decision Tree Classifier
-
+### Data preparation for a Decision Tree Classifier
 ```{r}
 train_data_factors <- train_data %>% select_if(is.factor)
 names_train_data_factors <- names(train_data_factors)
@@ -571,7 +577,7 @@ names_test_data_factors <- names(test_data_factors)
 ```
 
 ```{r}
-# Factor predictors must have at most 32 levels; encoding large factors as numeric
+# Factor predictors must have at most 32 levels; encoding large factors as numeric in the training data
 for (i in seq_along(names_train_data_factors)){
   print(names_train_data_factors[i])
   print(length(levels(train_data[,names_train_data_factors[i]])))
@@ -581,9 +587,8 @@ for (i in seq_along(names_train_data_factors)){
 }
 ```
 
-
 ```{r}
-# Factor predictors must have at most 32 levels; encoding large factors as numeric
+# Factor predictors must have at most 32 levels; encoding large factors as numeric in the test data
 for (i in seq_along(names_test_data_factors)){
   print(names_test_data_factors[i])
   print(length(levels(test_data[,names_test_data_factors[i]])))
@@ -625,20 +630,272 @@ test_data$addr_state <- test_data$addr_state / test_data_max.addr_state
 test_data$earliest_cr_line <- test_data$earliest_cr_line / test_data_max.earliest_cr_line
 ```
 
-
 ```{r}
 # Treating good_loan as a factor to create a classification tree
 train_data$good_loan <- as.factor(train_data$good_loan)
 ```
 
+```{r}
+# Rebalancing the data
+# 17% of the data are examples of loans that were charged off
+nrow(train_data %>% filter(good_loan == 0))/length(train_data$good_loan) * 100
+nrow(train_data %>% filter(good_loan == 0))
+
+# Creating Subsets
+paid_in_full <- train_data %>% filter(good_loan == 1)
+charged_off_subset <- train_data %>% filter(good_loan == 0)
+
+paid_in_full_subset <- sample_n(paid_in_full, nrow(charged_off_subset))
+
+paid_in_full_subset
+charged_off_subset
+```
 
 ```{r}
+# Creating a training and validation set
+paid_in_full_subset_split_index <- sample(c(1,2), nrow(paid_in_full_subset), replace = TRUE, prob = c(.8, .2))
+charged_off_subset_split_index <- sample(c(1,2), nrow(charged_off_subset), replace = TRUE, prob = c(.8, .2))
+```
+
+```{r}
+paid_in_full_subset_train <- paid_in_full_subset[paid_in_full_subset_split_index==1,]
+paid_in_full_subset_validaion <- paid_in_full_subset[paid_in_full_subset_split_index == 2, ]
+charged_off_subset_train <- charged_off_subset[charged_off_subset_split_index==1, ]
+charged_off_subset_validation <- charged_off_subset[charged_off_subset_split_index==2, ]
+
+train_data_balanced <- add_row(paid_in_full_subset_train, charged_off_subset_train)
+validation_data_balanced <- add_row(paid_in_full_subset_validaion, charged_off_subset_validation)
+```
+
+```{r}
+# Reshuffle the rows
 set.seed(42)
-tree.good_loan <- tree(good_loan ~ ., data = train_data)
+rows <- sample(nrow(train_data_balanced))
+train_data_balanced <- train_data_balanced[rows, ]
+rows <- sample(nrow(validation_data_balanced))
+validation_data_balanced <- validation_data_balanced[rows,]
+```
+
+```{r}
+train_data_balanced
+```
+
+```{r}
+validation_data_balanced
+```
+
+### Testing creation of a decision tree classifier
+```{r}
+heart_data <- read_csv('./Heart.csv')
+```
+
+```{r}
+# heart_data$AHD
+```
+
+```{r}
+heart_data_processed <- heart_data %>% mutate_if(is.character, as.factor)
+heart_data_processed <- heart_data_processed %>% mutate_if(is.factor, as.numeric)
+```
+
+```{r}
+# head(heart_data_processed)
+```
+
+```{r}
+# x <- as.matrix(heart_data_processed)
+# vif(heart_data_processed)
+```
+
+### Testing with Heart Data
+```{r}
+# set.seed(42)
+# tree.heart_data <- tree(AHD ~ ., data = heart_data_processed)
+# summary(tree.heart_data)
+```
+
+```{r}
+# plot(tree.heart_data)
+# text(tree.heart_data, pretty = 0)
+```
+
+### Training the Decision Tree Classifier
+```{r}
+# Removing column id as it has no relevant information with respect to good loan status
+train_data_balanced %<>% select(everything(), -id)
+validation_data_balanced %<>% select(everything(), -id)
+```
+
+```{r}
+# Examining vif of train_data_balanced
+train_data_balanced_integer <- train_data_balanced %>% mutate_if(is.factor, as.numeric)
+```
+
+```{r}
+train_data_balanced_integer
+```
+
+```{r}
+# Excluding response "good_loan" as predictor
+train_data_balanced_integer_good_loan <- train_data_balanced_integer %>% select(good_loan)
+train_data_balanced_integer %<>% select(everything(), -good_loan)
+```
+
+```{r}
+vif.train_data_balanced <- vif(train_data_balanced_integer)
+```
+
+```{r}
+vif.train_data_balanced_names <- names(vif.train_data_balanced)
+```
+
+```{r}
+# Variables that are explained by other variables in the dataset
+high_vif.names <- c(character())
+high_vif.values <- c(integer())
+high_vif.index <- 1
+print("Balanced Train Data with VIF scores greater than 5:")
+cat("\n")
+for (i in seq_along(vif.train_data_balanced_names)){
+  if (vif.train_data_balanced[i] > 5){
+    print(vif.train_data_balanced[i])
+    high_vif.names[high_vif.index] <- vif.train_data_balanced_names[i]
+    high_vif.values[high_vif.index] <- vif.train_data_balanced[i]
+    high_vif.index <- high_vif.index + 1
+    cat("\n")
+  }
+}
+```
+
+```{r}
+# Variables that are unique to the data
+print("Balanced Train Data with VIF scores less than 5:")
+cat("\n")
+low_vif.names <- c(character())
+low_vif.values <- c(integer())
+low_vif.index <- 1
+for (i in seq_along(vif.train_data_balanced_names)){
+  if (vif.train_data_balanced[i] <= 5){
+    print(vif.train_data_balanced[i])
+    low_vif.names[low_vif.index] <- vif.train_data_balanced_names[i]
+    low_vif.values[low_vif.index] <- vif.train_data_balanced[i]
+    low_vif.index <- low_vif.index + 1
+    cat("\n")
+  }
+}
+```
+
+```{r}
+high_vif.names
+high_vif.values
+```
+
+```{r}
+low_vif.names
+low_vif.values
+```
+
+```{r}
+# Removing columns with VIF scores greater than 5 due to collinearity in the data
+train_data_balanced_no_collinearity <- train_data_balanced %>% select(everything(), -high_vif.names)
+```
+
+
+```{r}
+train_data_balanced_no_collinearity
+```
+
+
+
+```{r}
+# small_sample <- sample(500)
+# small_sample
+train_data_balanced_no_collinearity_small_sample <- train_data_balanced_no_collinearity[small_sample, ]
+```
+
+
+```{r}
+# train_data_balanced_no_collinearity_integer_only <- train_data_balanced_no_collinearity %>% select_if(is.numeric)
+```
+
+```{r}
+# train_data_balanced_no_collinearity_integer_only <- cbind(train_data_balanced_no_collinearity_integer_only, train_data_balanced_no_collinearity$good_loan)
+```
+
+```{r}
+# train_data_balanced_no_collinearity_integer_only %<>% rename('good_loan' = `train_data_balanced_no_collinearity$good_loan`)
+```
+
+```{r}
+# train_data_balanced_no_collinearity_integer_only$good_loan <- as.numeric(train_data_balanced_no_collinearity_integer_only$good_loan)
+```
+
+### Fitting the Decision Tree Classifer
+```{r}
+set.seed(42)
+tree.good_loan <- tree(good_loan ~ ., data = train_data_balanced_no_collinearity_small_sample)
 summary(tree.good_loan)
 ```
 
 
+```{r}
+# set.seed(42)
+# tree.good_loan <- tree(good_loan ~ ., data = train_data_balanced)
+# summary(tree.good_loan)
+```
+
+```{r}
+plot(tree.good_loan)
+text(tree.good_loan, pretty = 0)
+```
+
+```{r}
+# Recode to factor
+# train_data_max.sub_grade* 0.0402098
+```
+
+```{r}
+tree.pred <- predict(tree.good_loan, validation_data_balanced, type = "class")
+accuracy(tree.pred, validation_data_balanced$good_loan)
+```
+
+### Pruning the Decision Tree
+```{r}
+set.seed(42)
+cv_tree.good_loan <- cv.tree(tree.good_loan, FUN = prune.misclass)
+names(tree.good_loan)
+tree.good_loan
+```
+
+```{r}
+par(mfrow = c(1,2))
+plot(cv_tree.good_loan$size, cv_tree.good_loan$dev, type = "b")
+plot(cv_tree.good_loan$k, cv_tree.good_loan$dev, type = "b")
+```
+```{r}
+which.min(tree.good_loan$size)
+tree.good_loan$size
+```
+
+
+```{r}
+prune.good_loan <- prune.misclass(tree.good_loan, best = 4)
+plot(prune.good_loan)
+text(prune.good_loan, pretty = 0)
+```
+
+```{r}
+tree_pred <- predict(prune.good_loan, validation_data_balanced, type = "class")
+accuracy(tree_pred, validation_data_balanced$good_loan)
+```
+
+
+
+```{r}
+set.seed(42)
+tree.good_loan <- tree(good_loan ~ ., data = train_data_balanced)
+summary(tree.good_loan)
+```
 ```{r}
 plot(tree.good_loan)
 text(tree.good_loan, pretty = 0)
@@ -646,29 +903,73 @@ text(tree.good_loan, pretty = 0)
 
 
 ```{r}
-# train_data$sub_grade[1]
-0.0402098 * train_data_max.sub_grade
+tree_pred <- predict(tree.good_loan, validation_data_balanced, type="class")
+accuracy(tree_pred, validation_data_balanced$good_loan)
 ```
 
 
 ```{r}
-test_data$sub_grade
+set.seed(42)
+cv_tree.good_loan <- cv.tree(tree.good_loan, FUN = prune.misclass)
+names(tree.good_loan)
+tree.good_loan
 ```
 
 
 ```{r}
-tree.pred <- predict(tree.good_loan, test_data, type = "class")
+par(mfrow = c(1,2))
+plot(cv_tree.good_loan$size, cv_tree.good_loan$dev, type = "b")
+plot(cv_tree.good_loan$k, cv_tree.good_loan$dev, type = "b")
+prune.good_loan <- prune.misclass(tree.good_loan, best = 2)
+plot(prune.good_loan)
+text(prune.good_loan, pretty = 0)
+```
 
-# table(tree.pred, High.test)
+```{r}
+tree_pred <- predict(prune.good_loan, validation_data_balanced, type="class")
+accuracy(tree_pred, validation_data_balanced$good_loan)
+```
 
-# f_print(sprintf("The test accuracy of predicted carseats sales greater than 8 using the fitted classification tree is: %0.3f%%.", ((79 + 62) / 200) * 100))
+
+### Creating a RandomForest to improve model accuracy
+
+```{r}
+# The number of variables in train_data_balanced
+length(train_data_balanced)
+```
+
+```{r}
+set.seed(42)
+bag.good_loan <- randomForest(good_loan ~ ., data = train_data_balanced, mtry = 6, importance = TRUE)
+```
+
+```{r}
+yhat.bag <- predict(bag.good_loan, newdata = validation_data_balanced)
+plot((as.numeric(yhat.bag)-1), (as.numeric(validation_data_balanced$good_loan) - 1))
+abline(0, 1)
+f_print(sprintf("The test MSE of the bagging model is: %0.3f.", mean(((as.numeric(yhat.bag)-1) - (as.numeric(validation_data_balanced$good_loan) - 1)) ^2))) # MSE is .345 @ mtry = 6; .347 otherwise
+```
+```{r}
+bag.boston <- randomForest(medv ~ ., data = Boston, subset = train, mtry = 12, ntree = 25)
+yhat.bag <- predict(bag.boston, newdata = Boston[-train, ])
+f_print(sprintf("The test MSE of the bagged model is %0.3f.", mean((yhat.bag - boston.test) ^2)))
+```
+
+```{r}
+set.seed(1)
+rf.boston <- randomForest(medv ~ ., data = Boston, subset = train, mtry = 6, importance = TRUE)
+yhat.rf <- predict(rf.boston, newdata = Boston[-train, ])
+f_print(sprintf("The test MSE of the random forest is: %0.3f.",mean((yhat.rf - boston.test)^2)))
 ```
 
 
 ```{r}
-tree.pred[tree.pred == 0] # predictions are 1 instead of 0
+importance(rf.boston) # View the importance of each variable
 ```
 
+```{r}
+varImpPlot(rf.boston)
+```
 
 ## Selecting features
 ```{r}
@@ -688,37 +989,35 @@ tree.pred[tree.pred == 0] # predictions are 1 instead of 0
 # Identifying outliers & High leverage values
 ```
 
+### Fitting a Lasso Regression
 
 ```{r}
 # Fitting a lasso regression to see which predictors may be eliminated.
 ```
 
-
 ```{r}
-# x_train <- train_data %>% select(everything(), -grade)
-# y_train <- train_data %>% select(grade)
-# 
-# x_test <- test_data %>% select(everything(), -grade)
-# y_test <- test_data %>% select(grade)
-# ```
-# 
-# ```{r}
-# x_train_numeric <- x_train %>% mutate_if(is.factor, as.numeric)
-# y_train_numeric <- y_train %>% mutate_if(is.factor, as.numeric)
-# x_test_numeric <- x_test %>% mutate_if(is.factor, as.numeric)
-# y_test_numeric <- y_test %>% mutate_if(is.factor, as.numeric)
+x_train <- train_data_balanced %>% select(everything(), -good_loan)
+y_train <- train_data_balanced %>% select(good_loan)
+
+x_test <- validation_data_balanced %>% select(everything(), -good_loan)
+y_test <- validation_data_balanced %>% select(good_loan)
+```
+ 
+```{r}
+x_train_numeric <- x_train %>% mutate_if(is.factor, as.numeric)
+y_train_numeric <- y_train %>% mutate_if(is.factor, as.numeric)
+x_test_numeric <- x_test %>% mutate_if(is.factor, as.numeric)
+y_test_numeric <- y_test %>% mutate_if(is.factor, as.numeric)
 ```
 
 ```{r}
 # x_train_numeric
 ```
 
-
 ```{r}
-x <- model.matrix(grade ~ ., data = train_data)[, -1] # -1 removes the intercept
+x <- model.matrix(grade ~ ., data = train_data_balanced)[, -1] # -1 removes the intercept
 y <- train_data$grade
 ```
-
 
 ```{r}
 set.seed(42)
