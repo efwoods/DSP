@@ -684,42 +684,132 @@ train_data_balanced
 validation_data_balanced
 ```
 
-### Testing creation of a decision tree classifier
+# Exploratory Data Analysis
+
+## Fitting a Lasso Regression
 ```{r}
-heart_data <- read_csv('./Heart.csv')
+# Fitting a lasso regression to see which predictors may be eliminated.
 ```
 
 ```{r}
-# heart_data$AHD
+x_train <- train_data_balanced %>% select(everything(), -good_loan)
+y_train <- train_data_balanced %>% select(good_loan)
+
+x_test <- validation_data_balanced %>% select(everything(), -good_loan)
+y_test <- validation_data_balanced %>% select(good_loan)
+```
+ 
+```{r}
+x_train_numeric <- x_train %>% mutate_if(is.factor, as.numeric)
+y_train_numeric <- y_train %>% mutate_if(is.factor, as.numeric)
+x_test_numeric <- x_test %>% mutate_if(is.factor, as.numeric)
+y_test_numeric <- y_test %>% mutate_if(is.factor, as.numeric)
 ```
 
 ```{r}
-heart_data_processed <- heart_data %>% mutate_if(is.character, as.factor)
-heart_data_processed <- heart_data_processed %>% mutate_if(is.factor, as.numeric)
+x <- model.matrix(good_loan ~ ., data = train_data_balanced)[, -1] # -1 removes the intercept
+y <- train_data_balanced$good_loan
 ```
 
 ```{r}
-# head(heart_data_processed)
+# grid
+typeof(x_train_numeric)
 ```
 
 ```{r}
-# x <- as.matrix(heart_data_processed)
-# vif(heart_data_processed)
-```
-
-### Testing with Heart Data
-```{r}
-# set.seed(42)
-# tree.heart_data <- tree(AHD ~ ., data = heart_data_processed)
-# summary(tree.heart_data)
+x_train_numeric_matrix <- as.matrix(x_train_numeric)
 ```
 
 ```{r}
-# plot(tree.heart_data)
-# text(tree.heart_data, pretty = 0)
+y_train_numeric_matrix <- as.matrix(y_train_numeric)
 ```
 
-### Training the Decision Tree Classifier
+```{r}
+x_test_numeric_matrix <- as.matrix(x_test_numeric)
+```
+
+```{r}
+y_test_numeric_matrix <- as.matrix(y_test_numeric)
+```
+
+### How to examine the useful coefficients of a lasso regression:
+```{r}
+# Create a lasso regression on the training set.
+set.seed(42)
+grid <- 10^seq(10, -2, length = 100)
+lasso.mod <- glmnet(x_train_numeric_matrix, y_train_numeric_matrix, alpha = 1, lambda = grid)
+# plot(lasso.mod)
+# summary(lasso.mod)
+```
+
+```{r}
+# Cross validate the training set to create a lasso regression & identify the minimum value of lambda.
+set.seed(42)
+cv.out <- cv.glmnet(x_train_numeric_matrix, y_train_numeric_matrix, alpha = 1)
+plot(cv.out)
+cv.out$lambda.min
+lasso.pred <- predict(lasso.mod, s = cv.out$lambda.min, newx = x_test_numeric_matrix)
+mean((lasso.pred - y_test_numeric_matrix)^2)
+```
+
+```{r}
+# Train a lasso regression using the training data
+out <- glmnet(x_train_numeric_matrix, y_train_numeric_matrix, lambda = grid, alpha = 1)
+```
+
+```{r}
+# Combine the training and validation data 
+x_all_numeric <- add_row(x_train_numeric, x_test_numeric)
+y_all_numeric <- add_row(y_train_numeric, y_test_numeric)
+
+# Convert to a matrix to allow for the creation of a lasso
+x_all_numeric_matrix <- as.matrix(x_all_numeric)
+y_all_numeric_matrix <- as.matrix(y_all_numeric)
+```
+
+```{r}
+# Train a lasso regression using the combined datasets
+out <- glmnet(x_all_numeric_matrix, y_all_numeric_matrix, lambda = grid, alpha = 1)
+
+# Make a prediction using the minimum lambda from the cross-validated lasso regression & save the coefficients
+lasso.coef <- predict(out, s = cv.out$lambda.min, type = "coefficients")[, ]
+lasso.coef
+```
+
+```{r}
+# Identify all the positive coefficients of the lasso regression:
+all_coef_names <- names(lasso.coef)
+lasso.pos_coef_names <- c(character())
+lasso.coef_positive_values <- c(integer())
+lasso.index <- 1
+verbose = FALSE
+for (i in seq_along(lasso.coef)){
+  if(lasso.coef[i] > 0) {
+    if(verbose){
+      print(all_coef_names[i])
+      print(lasso.coef[i])      
+    }
+    lasso.pos_coef_names[lasso.index] <- all_coef_names[i]
+    lasso.coef_positive_values[lasso.index] <- lasso.coef[i]
+    lasso.index <- lasso.index + 1
+  }
+}
+```
+
+```{r}
+lasso.pos_coef_names
+```
+
+```{r}
+f_print(sprintf('Lasso coefficients that were identified to have a significant effect on the "good loan" response variable include:'))
+cat("\n")
+f_print(sprintf('%s,', lasso.pos_coef_names[seq(2, (length(lasso.pos_coef_names))-1)]))
+cat(" ")
+f_print(sprintf(' & %s.',lasso.pos_coef_names[length(lasso.pos_coef_names)]))
+
+```
+
+## Training Decision Tree Classifiers
 ```{r}
 # Removing column id as it has no relevant information with respect to good loan status
 train_data_balanced %<>% select(everything(), -id)
@@ -800,19 +890,14 @@ low_vif.values
 train_data_balanced_no_collinearity <- train_data_balanced %>% select(everything(), -high_vif.names)
 ```
 
-
 ```{r}
 train_data_balanced_no_collinearity
 ```
 
-
-
 ```{r}
-# small_sample <- sample(500)
-# small_sample
+small_sample <- sample(500)
 train_data_balanced_no_collinearity_small_sample <- train_data_balanced_no_collinearity[small_sample, ]
 ```
-
 
 ```{r}
 # train_data_balanced_no_collinearity_integer_only <- train_data_balanced_no_collinearity %>% select_if(is.numeric)
@@ -873,13 +958,13 @@ plot(cv_tree.good_loan$size, cv_tree.good_loan$dev, type = "b")
 plot(cv_tree.good_loan$k, cv_tree.good_loan$dev, type = "b")
 ```
 ```{r}
-which.min(tree.good_loan$size)
-tree.good_loan$size
+# which.min(tree.good_loan$size)
+# tree.good_loan$size
 ```
 
 
 ```{r}
-prune.good_loan <- prune.misclass(tree.good_loan, best = 4)
+prune.good_loan <- prune.misclass(tree.good_loan, best = 25)
 plot(prune.good_loan)
 text(prune.good_loan, pretty = 0)
 ```
@@ -890,6 +975,7 @@ accuracy(tree_pred, validation_data_balanced$good_loan)
 ```
 
 
+### Creating a Decision Tree using more data
 
 ```{r}
 set.seed(42)
@@ -930,6 +1016,96 @@ tree_pred <- predict(prune.good_loan, validation_data_balanced, type="class")
 accuracy(tree_pred, validation_data_balanced$good_loan)
 ```
 
+## Template RandomForest
+### Bagging and Random Forest
+
+```{r}
+# Creating a bagged model using all variables & a small subset of data
+set.seed(42)
+bag.good_loan <- randomForest(good_loan ~ ., data = train_data_balanced_no_collinearity_small_sample, mtry = 63, importance = TRUE)
+yhat.bag <- predict(bag.good_loan, newdata = validation_data_balanced[small_sample, ])
+
+# Plot of ground truth vs. predictions
+# X is ground truth, y is prediction
+plot(validation_data_balanced[small_sample,]$good_loan, yhat.bag)
+
+# 1 - MSE
+(1 - mean(((as.numeric(yhat.bag) - 1) - (as.numeric(validation_data_balanced[small_sample, ]$good_loan) - 1))^2)) * 100
+```
+
+```{r}
+accuracy(yhat.bag, validation_data_balanced[small_sample, ]$good_loan)
+```
+
+
+```{r}
+# Creating a bagged model using all variables & a small subset of data and increasing the number of trees.
+set.seed(42)
+bag.good_loan <- randomForest(good_loan ~ ., data = train_data_balanced_no_collinearity_small_sample, mtry = 12, ntree = 25, importance = TRUE)
+yhat.bag <- predict(bag.good_loan, newdata = validation_data_balanced[small_sample, ])
+
+# Plot of ground truth vs. predictions
+# X is ground truth, y is prediction
+plot(validation_data_balanced[small_sample,]$good_loan, yhat.bag)
+
+# 1 - MSE
+(1 - mean(((as.numeric(yhat.bag) - 1) - (as.numeric(validation_data_balanced[small_sample, ]$good_loan) - 1))^2)) * 100
+
+accuracy(yhat.bag, validation_data_balanced[small_sample, ]$good_loan)
+```
+
+
+
+
+```{r}
+# Creating a bagged model using all variables & all data
+set.seed(42)
+bag.good_loan <- randomForest(good_loan ~ ., data = train_data_balanced_no_collinearity, mtry = 63, importance = TRUE)
+yhat.bag <- predict(bag.good_loan, newdata = validation_data_balanced)
+
+# Plot of ground truth vs. predictions
+# X is ground truth, y is prediction
+plot(validation_data_balanced[small_sample,]$good_loan, yhat.bag)
+
+# 1 - MSE
+(1 - mean(((as.numeric(yhat.bag) - 1) - (as.numeric(validation_data_balanced[small_sample, ]$good_loan) - 1))^2)) * 100
+```
+
+
+###### Template RandomForest
+
+```{r}
+set.seed(42)
+bag.boston <- randomForest(medv ~ ., data = Boston, subset = train, mtry = 12, importance = TRUE) # mtry indicates that all 12 predictors should be considered for each split of the tree. This enables bagging.
+```
+
+```{r}
+yhat.bag <- predict(bag.boston, newdata = Boston[-train, ])
+plot(yhat.bag, boston.test)
+abline(0, 1)
+f_print(sprintf("The test MSE of the bagging model is: %0.3f.", mean((yhat.bag - boston.test) ^2)))
+```
+
+```{r}
+bag.boston <- randomForest(medv ~ ., data = Boston, subset = train, mtry = 12, ntree = 25) # increasing the number of trees
+yhat.bag <- predict(bag.boston, newdata = Boston[-train, ])
+f_print(sprintf("The test MSE of the bagged model is %0.3f.", mean((yhat.bag - boston.test) ^2)))
+```
+
+```{r}
+set.seed(1)
+rf.boston <- randomForest(medv ~ ., data = Boston, subset = train, mtry = 6, importance = TRUE) # reducing the number of variables considered at each split: creating a random forest
+yhat.rf <- predict(rf.boston, newdata = Boston[-train, ])
+f_print(sprintf("The test MSE of the random forest is: %0.3f.",mean((yhat.rf - boston.test)^2)))
+```
+
+```{r}
+importance(rf.boston) # View the importance of each variable
+```
+
+```{r}
+varImpPlot(rf.boston)
+```
 
 ### Creating a RandomForest to improve model accuracy
 
@@ -949,97 +1125,26 @@ plot((as.numeric(yhat.bag)-1), (as.numeric(validation_data_balanced$good_loan) -
 abline(0, 1)
 f_print(sprintf("The test MSE of the bagging model is: %0.3f.", mean(((as.numeric(yhat.bag)-1) - (as.numeric(validation_data_balanced$good_loan) - 1)) ^2))) # MSE is .345 @ mtry = 6; .347 otherwise
 ```
+
 ```{r}
-bag.boston <- randomForest(medv ~ ., data = Boston, subset = train, mtry = 12, ntree = 25)
-yhat.bag <- predict(bag.boston, newdata = Boston[-train, ])
-f_print(sprintf("The test MSE of the bagged model is %0.3f.", mean((yhat.bag - boston.test) ^2)))
+# bag.boston <- randomForest(medv ~ ., data = Boston, subset = train, mtry = 12, ntree = 25)
+# yhat.bag <- predict(bag.boston, newdata = Boston[-train, ])
+# f_print(sprintf("The test MSE of the bagged model is %0.3f.", mean((yhat.bag - boston.test) ^2)))
 ```
 
 ```{r}
-set.seed(1)
-rf.boston <- randomForest(medv ~ ., data = Boston, subset = train, mtry = 6, importance = TRUE)
-yhat.rf <- predict(rf.boston, newdata = Boston[-train, ])
-f_print(sprintf("The test MSE of the random forest is: %0.3f.",mean((yhat.rf - boston.test)^2)))
-```
-
-
-```{r}
-importance(rf.boston) # View the importance of each variable
+# set.seed(1)
+# rf.boston <- randomForest(medv ~ ., data = Boston, subset = train, mtry = 6, importance = TRUE)
+# yhat.rf <- predict(rf.boston, newdata = Boston[-train, ])
+# f_print(sprintf("The test MSE of the random forest is: %0.3f.",mean((yhat.rf - boston.test)^2)))
 ```
 
 ```{r}
-varImpPlot(rf.boston)
-```
-
-## Selecting features
-```{r}
-# Potential Features used to predict grade: 
- # num_tl_120dpd_2m, delinq_2yrs, delinq_amnt, num_accts_ever_120_pd, acc_now_delinq, dti
-# 
-# selected_model_test <- test_data %>% select(num_accts_ever_120_pd, delinq_2yrs, delinq_amnt, num_accts_ever_120_pd, acc_now_delinq, dti, grade)
-# selected_model_train <- train_data %>% select(num_accts_ever_120_pd, delinq_2yrs, delinq_amnt, num_accts_ever_120_pd, acc_now_delinq, dti, grade)
-# ```
-# 
-# ```{r}
-# write.csv(selected_model_train, file = 'selected_model_train.csv')
-# write.csv(selected_model_test, file = 'selected_model_test.csv')
+# importance(rf.boston) # View the importance of each variable
 ```
 
 ```{r}
-# Identifying outliers & High leverage values
-```
-
-### Fitting a Lasso Regression
-
-```{r}
-# Fitting a lasso regression to see which predictors may be eliminated.
-```
-
-```{r}
-x_train <- train_data_balanced %>% select(everything(), -good_loan)
-y_train <- train_data_balanced %>% select(good_loan)
-
-x_test <- validation_data_balanced %>% select(everything(), -good_loan)
-y_test <- validation_data_balanced %>% select(good_loan)
-```
- 
-```{r}
-x_train_numeric <- x_train %>% mutate_if(is.factor, as.numeric)
-y_train_numeric <- y_train %>% mutate_if(is.factor, as.numeric)
-x_test_numeric <- x_test %>% mutate_if(is.factor, as.numeric)
-y_test_numeric <- y_test %>% mutate_if(is.factor, as.numeric)
-```
-
-```{r}
-# x_train_numeric
-```
-
-```{r}
-x <- model.matrix(grade ~ ., data = train_data_balanced)[, -1] # -1 removes the intercept
-y <- train_data$grade
-```
-
-```{r}
-set.seed(42)
-grid <- 10^seq(10, -2, length = 100)
-lasso.mod <- glmnet(x_train_numeric, y_train_numeric, alpha = 1, lambda = grid)
-plot(lasso.mod)
-```
-
-```{r}
-set.seed(1)
-cv.out <- cv.glmnet(x[train, ], y[train], alpha = 1)
-plot(cv.out)
-cv.out$lambda.min
-lasso.pred <- predict(lasso.mod, s = cv.out$lambda.min, newx = x[test, ])
-mean((lasso.pred - y.test)^2)
-```
-
-
-```{r}
- out <- glmnet(x, y, lambda = grid, alpha = 1)
-lasso.coef <- predict(out, s = cv.out$lambda.min, type = "coefficients")[1:20, ]
-lasso.coef
+# varImpPlot(rf.boston)
 ```
 
 
