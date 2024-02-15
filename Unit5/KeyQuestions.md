@@ -18,7 +18,7 @@
 
 Once you have prepared the data (train_loans2013_2015q1_minimalprocessing.csv and test_loans2013_2015q1_minimalprocessing.csv)  provided within the unit 4 live session preparation:
 
-1. Create Decision Tree, Random Forest, Gradient Boosted Trees on your feature list and default feature list. How does logloss differ?
+1. Create Decision Tree, Random Forest, Gradient Boosted Trees on your feature list and default feature list. How does logloss differ? 
 
 2. Explain 'Validation,' 'Cross Validation' and 'Holdout' - i.e. how many approximate samples are being used in each of those columns.
 
