@@ -373,6 +373,78 @@ train_data <- read.csv('./train_loans2013_2015q1_minimalprocessing.csv')
 test_data <- read.csv('./test_loans2013_2015q1_minimalprocessing.csv')
 ```
 
+```{r}
+# Encoding variables with mostly missing data as factors then numeric & capturing encodings 
+
+train_data$hardship_type <- as.numeric(as.factor(train_data$hardship_type)) - 1
+train_data.encodings.hardship_type <- levels(as.factor(train_data$hardship_type))
+
+train_data$hardship_reason <- as.numeric(as.factor(train_data$hardship_reason)) - 1
+train_data.encodings.hardship_reason <- levels(as.factor(train_data$hardship_reason))
+
+train_data$hardship_status <- as.numeric(as.factor(train_data$hardship_status)) - 1
+train_data.encodings.hardship_status <- levels(as.factor(train_data$hardship_status))
+
+train_data$hardship_start_date <- as.numeric(as.factor(train_data$hardship_start_date)) - 1
+train_data.encodings.hardship_start_date <- levels(as.factor(train_data$hardship_start_date))
+
+train_data$hardship_end_date <- as.numeric(as.factor(train_data$hardship_end_date)) - 1
+train_data.encodings.hardship_end_date <- levels(as.factor(train_data$hardship_end_date))
+
+train_data$payment_plan_start_date <- as.numeric(as.factor(train_data$payment_plan_start_date)) - 1
+train_data.encodings.payment_plan_start_date <- levels(as.factor(train_data$payment_plan_start_date))
+
+train_data$hardship_loan_status <- as.numeric(as.factor(train_data$hardship_loan_status)) - 1
+train_data.encodings.hardship_loan_status <- levels(as.factor(train_data$hardship_loan_status))
+
+train_data$debt_settlement_flag <- as.numeric(as.factor(train_data$debt_settlement_flag)) - 1
+train_data.encodings.debt_settlement_flag <- levels(as.factor(train_data$debt_settlement_flag))
+
+train_data$debt_settlement_flag_date <- as.numeric(as.factor(train_data$debt_settlement_flag_date)) - 1
+train_data.encodings.debt_settlement_flag_date <- levels(as.factor(train_data$debt_settlement_flag_date))
+
+train_data$settlement_status <- as.numeric(as.factor(train_data$settlement_status)) - 1
+train_data.encodings.settlement_status <- levels(as.factor(train_data$settlement_status))
+
+train_data$settlement_date <- as.numeric(as.factor(train_data$settlement_date)) - 1
+train_data.encodings.settlement_date <- levels(as.factor(train_data$settlement_date))
+```
+
+```{r}
+test_data$hardship_type <- as.numeric(as.factor(test_data$hardship_type)) - 1
+test_data.encodings.hardship_type <- levels(as.factor(test_data$hardship_type))
+
+test_data$hardship_reason <- as.numeric(as.factor(test_data$hardship_reason)) - 1
+test_data.encodings.hardship_reason <- levels(as.factor(test_data$hardship_reason))
+
+test_data$hardship_status <- as.numeric(as.factor(test_data$hardship_status)) - 1
+test_data.encodings.hardship_status <- levels(as.factor(test_data$hardship_status))
+
+test_data$hardship_start_date <- as.numeric(as.factor(test_data$hardship_start_date)) - 1
+test_data.encodings.hardship_start_date <- levels(as.factor(test_data$hardship_start_date))
+
+test_data$hardship_end_date <- as.numeric(as.factor(test_data$hardship_end_date)) - 1
+test_data.encodings.hardship_end_date <- levels(as.factor(test_data$hardship_end_date))
+
+test_data$payment_plan_start_date <- as.numeric(as.factor(test_data$payment_plan_start_date)) - 1
+test_data.encodings.payment_plan_start_date <- levels(as.factor(test_data$payment_plan_start_date))
+
+test_data$hardship_loan_status <- as.numeric(as.factor(test_data$hardship_loan_status)) - 1
+test_data.encodings.hardship_loan_status <- levels(as.factor(test_data$hardship_loan_status))
+
+test_data$debt_settlement_flag <- as.numeric(as.factor(test_data$debt_settlement_flag)) - 1
+test_data.encodings.debt_settlement_flag <- levels(as.factor(test_data$debt_settlement_flag))
+
+test_data$debt_settlement_flag_date <- as.numeric(as.factor(test_data$debt_settlement_flag_date)) - 1
+test_data.encodings.debt_settlement_flag_date <- levels(as.factor(test_data$debt_settlement_flag_date))
+
+test_data$settlement_status <- as.numeric(as.factor(test_data$settlement_status)) - 1
+test_data.encodings.settlement_status <- levels(as.factor(test_data$settlement_status))
+
+test_data$settlement_date <- as.numeric(as.factor(test_data$settlement_date)) - 1
+test_data.encodings.settlement_date <- levels(as.factor(test_data$settlement_date))
+```
+
 ## Cleaning Training Data
 ### Cleaning Character data
 ```{r}
@@ -380,7 +452,6 @@ training_clean_result <- clean_char_data(train_data)
 train_data <- training_clean_result[[1]]
 train_data
 ```
-
 ```{r}
 # Identify columns with missing values in the training data
 training_id_prop_NA_list <- identify_proportion_NA(train_data, verbose=FALSE)
@@ -394,6 +465,7 @@ names_factors <- names(factors)
 
 ```{r}
 # Identify the proportion of missing values amongst the factors
+### hardship_status
 for (i in seq_along(names_factors)){
   describe_proportion_missing(training_id_prop_NA_list, names_factors[i])
   cat("\n")
@@ -429,15 +501,11 @@ train_data <- training_id_prop_NA_list[[1]]
 train_data %<>% select(everything(), -emp_title, -title, -url, -desc)
 ```
 
-### Impute missing values using clustering techniques
 ```{r}
+### Impute missing values using clustering techniques
 # emp_length
 # last_credit_pull_d
 # last_pymnt_d
-```
-
-```{r}
-# train_data$emp_length
 ```
 
 ```{r}
@@ -512,7 +580,7 @@ test_data %<>% select(everything(), -emp_title, -emp_length, -title, -url, -desc
 ```
 
 ```{r}
-(test_data)
+# (test_data)
 # (train_data)
 ```
 
@@ -559,15 +627,14 @@ train_data
 ```
 
 ```{r}
-# write.csv(train_data, file = 'clean_train_loans2013_2015q1_minimalprocessing.csv')
+write.csv(train_data, file = 'clean_train_loans2013_2015q1_minimalprocessing.csv')
 ```
 
 ```{r}
-# write.csv(test_data, file = 'clean_test_loans2013_2015q1_minimalprocessing.csv')
+write.csv(test_data, file = 'clean_test_loans2013_2015q1_minimalprocessing.csv')
 ```
 
-# Decision Tree Classifier
-### Data preparation for a Decision Tree Classifier
+# Data Wrangling to create a balanced training and validation classifier
 ```{r}
 train_data_factors <- train_data %>% select_if(is.factor)
 names_train_data_factors <- names(train_data_factors)
@@ -685,13 +752,9 @@ validation_data_balanced
 ```
 
 # Exploratory Data Analysis
-
 ## Fitting a Lasso Regression
 ```{r}
 # Fitting a lasso regression to see which predictors may be eliminated.
-```
-
-```{r}
 x_train <- train_data_balanced %>% select(everything(), -good_loan)
 y_train <- train_data_balanced %>% select(good_loan)
 
@@ -809,9 +872,13 @@ f_print(sprintf(' & %s.',lasso.pos_coef_names[length(lasso.pos_coef_names)]))
 
 ```
 
+# Decision Tree Classifier
 ## Training Decision Tree Classifiers
 ```{r}
 # Removing column id as it has no relevant information with respect to good loan status
+train_data_balanced_id <- train_data_balanced$id
+validation_data_balanced_id <- validation_data_balanced$id
+
 train_data_balanced %<>% select(everything(), -id)
 validation_data_balanced %<>% select(everything(), -id)
 ```
@@ -895,6 +962,26 @@ train_data_balanced_no_collinearity
 ```
 
 ```{r}
+train_data_balanced_no_collinearity
+```
+
+
+```{r}
+validation_data_balanced_no_collinearity <- validation_data_balanced %>% select(everything(), -high_vif.names)
+```
+
+
+```{r}
+# train_data_balanced_no_collinearity
+```
+
+```{r}
+validation_data_balanced_no_collinearity
+```
+
+
+# Data Wrangling for Decision Tree Classifier
+```{r}
 small_sample <- sample(500)
 train_data_balanced_no_collinearity_small_sample <- train_data_balanced_no_collinearity[small_sample, ]
 ```
@@ -921,7 +1008,6 @@ set.seed(42)
 tree.good_loan <- tree(good_loan ~ ., data = train_data_balanced_no_collinearity_small_sample)
 summary(tree.good_loan)
 ```
-
 
 ```{r}
 # set.seed(42)
@@ -958,13 +1044,11 @@ plot(cv_tree.good_loan$size, cv_tree.good_loan$dev, type = "b")
 plot(cv_tree.good_loan$k, cv_tree.good_loan$dev, type = "b")
 ```
 ```{r}
-# which.min(tree.good_loan$size)
-# tree.good_loan$size
+smallest_dev <- cv_tree.good_loan$size[which.min(cv_tree.good_loan$dev)]
 ```
 
-
 ```{r}
-prune.good_loan <- prune.misclass(tree.good_loan, best = 25)
+prune.good_loan <- prune.misclass(tree.good_loan, best = smallest_dev)
 plot(prune.good_loan)
 text(prune.good_loan, pretty = 0)
 ```
@@ -974,33 +1058,34 @@ tree_pred <- predict(prune.good_loan, validation_data_balanced, type = "class")
 accuracy(tree_pred, validation_data_balanced$good_loan)
 ```
 
-
 ### Creating a Decision Tree using more data
-
 ```{r}
 set.seed(42)
 tree.good_loan <- tree(good_loan ~ ., data = train_data_balanced)
 summary(tree.good_loan)
 ```
+
 ```{r}
 plot(tree.good_loan)
 text(tree.good_loan, pretty = 0)
 ```
-
 
 ```{r}
 tree_pred <- predict(tree.good_loan, validation_data_balanced, type="class")
 accuracy(tree_pred, validation_data_balanced$good_loan)
 ```
 
+```{r}
+# length(tree.pred)
+validation_data_balanced
+```
 
 ```{r}
 set.seed(42)
-cv_tree.good_loan <- cv.tree(tree.good_loan, FUN = prune.misclass)
+cv_tree.good_loan <- cv.tree(tree.good_loan, FUN = prune.misclass) # cv_tree.good_loan
 names(tree.good_loan)
 tree.good_loan
 ```
-
 
 ```{r}
 par(mfrow = c(1,2))
@@ -1016,33 +1101,33 @@ tree_pred <- predict(prune.good_loan, validation_data_balanced, type="class")
 accuracy(tree_pred, validation_data_balanced$good_loan)
 ```
 
-## Template RandomForest
+## RandomForest
 ### Bagging and Random Forest
-
 ```{r}
 # Creating a bagged model using all variables & a small subset of data
 set.seed(42)
-bag.good_loan <- randomForest(good_loan ~ ., data = train_data_balanced_no_collinearity_small_sample, mtry = 63, importance = TRUE)
-yhat.bag <- predict(bag.good_loan, newdata = validation_data_balanced[small_sample, ])
+bag.good_loan_bag <- randomForest(good_loan ~ ., data = train_data_balanced_no_collinearity_small_sample, mtry = 63, importance = TRUE)
+yhat.bag <- predict(bag.good_loan_bag, newdata = validation_data_balanced[small_sample, ])
 
 # Plot of ground truth vs. predictions
 # X is ground truth, y is prediction
 plot(validation_data_balanced[small_sample,]$good_loan, yhat.bag)
+```
 
-# 1 - MSE
-(1 - mean(((as.numeric(yhat.bag) - 1) - (as.numeric(validation_data_balanced[small_sample, ]$good_loan) - 1))^2)) * 100
+```{r}
+# Accuracy = 1 - MSE
+# (1 - mean(((as.numeric(yhat.bag) - 1) - (as.numeric(validation_data_balanced[small_sample, ]$good_loan) - 1))^2)) * 100
 ```
 
 ```{r}
 accuracy(yhat.bag, validation_data_balanced[small_sample, ]$good_loan)
 ```
-
 
 ```{r}
 # Creating a bagged model using all variables & a small subset of data and increasing the number of trees.
 set.seed(42)
-bag.good_loan <- randomForest(good_loan ~ ., data = train_data_balanced_no_collinearity_small_sample, mtry = 12, ntree = 25, importance = TRUE)
-yhat.bag <- predict(bag.good_loan, newdata = validation_data_balanced[small_sample, ])
+bag.good_loan_random_forest <- randomForest(good_loan ~ ., data = train_data_balanced_no_collinearity_small_sample, mtry = 12, ntree = 25, importance = TRUE)
+yhat.bag <- predict(bag.good_loan_random_forest, newdata = validation_data_balanced[small_sample, ])
 
 # Plot of ground truth vs. predictions
 # X is ground truth, y is prediction
@@ -1053,9 +1138,6 @@ plot(validation_data_balanced[small_sample,]$good_loan, yhat.bag)
 
 accuracy(yhat.bag, validation_data_balanced[small_sample, ]$good_loan)
 ```
-
-
-
 
 ```{r}
 # Creating a bagged model using all variables & all data
@@ -1065,50 +1147,41 @@ yhat.bag <- predict(bag.good_loan, newdata = validation_data_balanced)
 
 # Plot of ground truth vs. predictions
 # X is ground truth, y is prediction
-plot(validation_data_balanced[small_sample,]$good_loan, yhat.bag)
+plot(validation_data_balanced$good_loan, yhat.bag)
 
 # 1 - MSE
 (1 - mean(((as.numeric(yhat.bag) - 1) - (as.numeric(validation_data_balanced[small_sample, ]$good_loan) - 1))^2)) * 100
 ```
 
-
-###### Template RandomForest
-
+### Creating a boosted tree to increase model performance
 ```{r}
 set.seed(42)
-bag.boston <- randomForest(medv ~ ., data = Boston, subset = train, mtry = 12, importance = TRUE) # mtry indicates that all 12 predictors should be considered for each split of the tree. This enables bagging.
+boost.good_loan <- gbm(good_loan ~ ., data = train_data_balanced_no_collinearity_small_sample, distribution = "gaussian", n.trees = 5000, interaction.depth = 4)
+summary(boost.good_loan)
+
+yhat.boost <- predict(boost.good_loan, newdata = validation_data_balanced[small_sample,], n.trees = 5000)
+
+# MSE of the boosted predictions
+boost.mse <- mean(((as.numeric(yhat.boost) - 1) - (as.numeric(validation_data_balanced[small_sample, ]$good_loan) - 1))^2)
+
 ```
 
 ```{r}
-yhat.bag <- predict(bag.boston, newdata = Boston[-train, ])
-plot(yhat.bag, boston.test)
-abline(0, 1)
-f_print(sprintf("The test MSE of the bagging model is: %0.3f.", mean((yhat.bag - boston.test) ^2)))
+# accuracy of the boosted model
+boost.acc <- (1 - boost.mse) * 100
+f_print(sprintf("Accuracy of the boosted model: %0.3f%%", boost.acc))
 ```
 
 ```{r}
-bag.boston <- randomForest(medv ~ ., data = Boston, subset = train, mtry = 12, ntree = 25) # increasing the number of trees
-yhat.bag <- predict(bag.boston, newdata = Boston[-train, ])
-f_print(sprintf("The test MSE of the bagged model is %0.3f.", mean((yhat.bag - boston.test) ^2)))
-```
+# Increasing boosted accuracy by reducing the value of lambda
+boost.good_loan_with_shrinkage <- gbm(good_loan ~ ., data = train_data_balanced_no_collinearity_small_sample, distribution = "gaussian", n.trees = 5000, interaction.depth = 4, shrinkage = 0.2)
+summary(boost.good_loan_with_shrinkage)
+yhat.boost_with_shrinkage <- predict(boost.good_loan_with_shrinkage, newdata = validation_data_balanced[small_sample, ], n.trees = 5000)
 
-```{r}
-set.seed(1)
-rf.boston <- randomForest(medv ~ ., data = Boston, subset = train, mtry = 6, importance = TRUE) # reducing the number of variables considered at each split: creating a random forest
-yhat.rf <- predict(rf.boston, newdata = Boston[-train, ])
-f_print(sprintf("The test MSE of the random forest is: %0.3f.",mean((yhat.rf - boston.test)^2)))
+# MSE of the boosted predicitons 
+boost.mse_with_shrinkage <- as.numeric(yhat.boost_with_shrinkage)
 ```
-
-```{r}
-importance(rf.boston) # View the importance of each variable
-```
-
-```{r}
-varImpPlot(rf.boston)
-```
-
 ### Creating a RandomForest to improve model accuracy
-
 ```{r}
 # The number of variables in train_data_balanced
 length(train_data_balanced)
@@ -1127,24 +1200,394 @@ f_print(sprintf("The test MSE of the bagging model is: %0.3f.", mean(((as.numeri
 ```
 
 ```{r}
-# bag.boston <- randomForest(medv ~ ., data = Boston, subset = train, mtry = 12, ntree = 25)
-# yhat.bag <- predict(bag.boston, newdata = Boston[-train, ])
-# f_print(sprintf("The test MSE of the bagged model is %0.3f.", mean((yhat.bag - boston.test) ^2)))
+importance(bag.good_loan)
 ```
 
 ```{r}
-# set.seed(1)
-# rf.boston <- randomForest(medv ~ ., data = Boston, subset = train, mtry = 6, importance = TRUE)
-# yhat.rf <- predict(rf.boston, newdata = Boston[-train, ])
-# f_print(sprintf("The test MSE of the random forest is: %0.3f.",mean((yhat.rf - boston.test)^2)))
+varImpPlot(bag.good_loan)
+```
+
+
+# Logistic Regression on Training & Validation Data with no collinearity 
+
+```{r}
+# train_data_balanced_no_collinearity[train_data_balanced_no_collinearity$good_loan == 0, 'good_loan'] <- 2
+# train_data_balanced_no_collinearity[train_data_balanced_no_collinearity$good_loan == 1, 'good_loan'] <- 0
+# train_data_balanced_no_collinearity[train_data_balanced_no_collinearity$good_loan == 2, 'good_loan'] <- 1
+train_data_balanced_no_collinearity$good_loan <-  as.integer(train_data_balanced_no_collinearity$good_loan)
 ```
 
 ```{r}
-# importance(rf.boston) # View the importance of each variable
+train_data_balanced_no_collinearity$good_loan <- train_data_balanced_no_collinearity$good_loan - 1
 ```
 
 ```{r}
-# varImpPlot(rf.boston)
+# train_data_balanced_no_collinearity[train_data_balanced_no_collinearity$good_loan == 0, 'good_loan'] <- 2
+# train_data_balanced_no_collinearity[train_data_balanced_no_collinearity$good_loan == 1, 'good_loan'] <- 0
+# train_data_balanced_no_collinearity[train_data_balanced_no_collinearity$good_loan == 2, 'good_loan'] <- 1
 ```
+
+```{r}
+train_data_balanced_no_collinearity_corrected_good_loan <- train_data_balanced_no_collinearity
+```
+
+```{r}
+train_data_balanced_no_collinearity_corrected_good_loan$good_loan <- as.factor(train_data_balanced_no_collinearity$good_loan)
+```
+
+```{r}
+validation_data_balanced_no_collinearity_good_loan_corrected <- validation_data_balanced_no_collinearity
+```
+
+```{r}
+validation_data_balanced_no_collinearity_good_loan_corrected$good_loan <- as.integer(validation_data_balanced_no_collinearity_good_loan_corrected$good_loan)
+```
+
+
+```{r}
+validation_data_balanced_no_collinearity_good_loan_corrected$good_loan <- validation_data_balanced_no_collinearity_good_loan_corrected$good_loan - 1
+```
+
+
+```{r}
+# validation_data_balanced_no_collinearity_good_loan_corrected
+```
+
+```{r}
+# validation_data_balanced_no_collinearity_good_loan_corrected[validation_data_balanced_no_collinearity_good_loan_corrected$good_loan == 0, 'good_loan'] <- 2
+# validation_data_balanced_no_collinearity_good_loan_corrected[validation_data_balanced_no_collinearity_good_loan_corrected$good_loan == 1, 'good_loan'] <- 0
+# validation_data_balanced_no_collinearity_good_loan_corrected[validation_data_balanced_no_collinearity_good_loan_corrected$good_loan == 2, 'good_loan'] <- 1
+```
+
+```{r}
+# validation_data_balanced_no_collinearity_good_loan_corrected has been corrected where 0 is "fully paid" and 1 is "charged off"
+validation_data_balanced_no_collinearity_good_loan_corrected$good_loan
+
+```
+
+```{r}
+modified_outlier_columns <-  c('total_bal_ex_mort', 'total_acc', 'tot_hi_cred_lim', 'tot_cur_bal', 'tot_coll_amt', 'tax_liens', 'settlement_percentage', 'settlement_amount', 'revol_bal', 'recoveries', 'pub_rec', 'pct_tl_nvr_dlq', 'open_acc', 'num_tl_op_past_12m', 'num_sats', 'num_rev_accts', 'num_op_rev_tl', 'num_il_tl', 'num_bc_tl', 'num_actv_bc_tl', 'mths_since_recent_bc', 'mo_sin_rcnt_tl', 'mo_sin_rcnt_rev_tl_op', 'mo_sin_old_rev_tl_op', 'mo_sin_old_il_acct', 'fico_range_low', 'fico_range_high', 'delinq_amnt', 'delinq_2yrs', 'collection_recovery_fee', 'bc_open_to_buy', 'avg_cur_bal', 'annual_inc')
+```
+
+```{r}
+important_features <- c('loan_amnt', 'int_rate', 'grade', 'sub_grade', 'annual_inc', 'verfication_status', 'ddi', 'tot_cur_bal', 'total_rev_hi_lim', 'avg_cur_bal')
+```
+
+
+```{r}
+train_data_balanced_no_collinearity_corrected_good_loan
+```
+
+
+
+```{r}
+train_data_balanced_no_collinearity_corrected_good_loan_important_features <- train_data_balanced_no_collinearity_corrected_good_loan %>% select('loan_amnt', 'annual_inc', 'verification_status', 'dti', 'good_loan')
+# outlier_columns
+# target_leakage_columns
+```
+
+
+```{r}
+glm.fit <- glm(good_loan ~ ., data = train_data_balanced_no_collinearity_corrected_good_loan, family = "binomial")
+glm.prob <- predict(glm.fit, validation_data_balanced_no_collinearity_good_loan_corrected, type = "response")
+# glm.pred <- rep(0, length(validation_data_balanced_no_collinearity_good_loan_corrected$good_loan))
+# glm.pred[glm.prob > 0.5] <- 1
+# table(glm.pred, validation_data_balanced_no_collinearity$good_loan)
+```
+
+```{r}
+# length(validation_data_balanced_no_collinearity$good_loan)
+```
+
+
+```{r}
+nrow(validation_data_balanced_no_collinearity_good_loan_corrected)
+```
+
+
+```{r}
+length(glm.prob)
+length(glm.pred)
+length(validation_data_balanced_no_collinearity_good_loan_corrected$good_loan)
+length(train_data_balanced_no_collinearity$good_loan)
+```
+
+```{r}
+length(glm.prob)
+nrow(test_data)
+```
+
+```{r}
+accuracy(glm.prob, validation_data_balanced_no_collinearity_good_loan_corrected$good_loan)
+```
+
+
+
+```{r}
+# Recoding predicitons such that a 0 indicates a fully paid loan & a 1 indicates a loan that is charged off
+# glm.pred[glm.pred == 1] <- 2
+# glm.pred[glm.pred == 0] <- 1
+# glm.pred[glm.pred == 2] <- 0
+# 
+# validation_data_balanced_no_collinearity_inverted_results <- as.numeric(validation_data_balanced_no_collinearity$good_loan) - 1
+# validation_data_balanced_no_collinearity_inverted_results[validation_data_balanced_no_collinearity_inverted_results == 1] <- 2
+# validation_data_balanced_no_collinearity_inverted_results[validation_data_balanced_no_collinearity_inverted_results == 0] <- 1
+# validation_data_balanced_no_collinearity_inverted_results[validation_data_balanced_no_collinearity_inverted_results == 2] <- 0
+
+# length(validation_data_balanced_no_collinearity$good_loan)
+# length(validation_data_balanced_id)
+```
+
+```{r}
+# validation_data_balanced_no_collinearity_inverted_results
+```
+
+```{r}
+results <- data.frame(test_data$id, glm_test_prob)
+```
+
+```{r}
+results
+```
+
+
+
+```{r}
+# creating an output csv 
+results <- data.frame(validation_data_balanced_id, glm.pred)
+```
+
+```{r}
+results %<>% rename('id' = `test_data.id`)
+```
+
+```{r}
+results %<>% rename('good_loan' = `glm_test_prob`)
+```
+
+```{r}
+results
+```
+
+
+
+```{python}
+from sklearn.metrics import log_loss
+```
+
+```{r}
+glm_pred <- glm.pred
+```
+
+```{python}
+# r.validation_data_balanced_no_collinearity_inverted_results
+r.glm_pred
+```
+
+```{python}
+log_loss_val = log_loss(r.validation_data_balanced_no_collinearity_good_loan_corrected.good_loan, r.glm_pred)
+```
+
+```{python}
+log_loss_val
+```
+
+```{python}
+log_loss_val
+```
+
+```{r}
+test_data
+```
+
+```{r}
+glm.prob <- predict(glm.fit, test_data, type = "response")
+glm.pred <- rep(0, nrow(test_data))
+glm.pred[glm.prob > 0.5] <- 1
+# glm.pred[glm.pred == 1] <- 2
+# glm.pred[glm.pred == 0] <- 1
+# glm.pred[glm.pred == 2] <- 0
+```
+
+```{r}
+for (i in seq(glm.pred)){
+  glm.pred[i] <- 0
+}
+```
+
+```{r}
+glm.pred
+```
+
+```{r}
+# glm.pred
+# test_data$id
+results <- data.frame(test_data$id, glm.pred)
+results %<>% rename('id' = `test_data.id`)
+results %<>% rename('good_loan' = `glm.pred`)
+```
+
+```{r}
+results
+```
+
+
+```{r}
+write.csv(results, 'submission_4.csv', row.names = FALSE)
+```
+
+
+
+```{r}
+sample_submission <- read.csv('./sample_submission.csv')
+```
+
+# Reading Rashmi Bantha's Cleaned data for comparison
+```{r}
+rb_cleaned_train <- read_csv('./train_cleaned_jan24.csv')
+rb_cleaned_test <- read_csv('./test_cleaned_jan24.csv')
+```
+
+```{r}
+train_data_balanced_no_collinearity
+```
+
+```{r}
+# rb_cleaned_train$good_loan
+length(rb_cleaned_test$good_loan)
+```
+
+```{r}
+train_index <- sample(c(1,2), length(rb_cleaned_train$good_loan), replace = TRUE, prob = c(0.8, 0.2))
+```
+
+```{r}
+rb_cleaned_train_set <- rb_cleaned_train[train_index == 1, ]
+rb_cleaned_validation_set <- rb_cleaned_train[train_index == 2,]
+```
+
+```{r}
+# Rashmi Bantha's Cleaned data used to create a logistic regression for comparison of performance
+glm.fit <- glm(good_loan ~ ., data = rb_cleaned_train_set, family = "binomial")
+glm.prob <- predict(glm.fit, rb_cleaned_validation_set, type = "response")
+glm.pred <- rep(0, length(rb_cleaned_validation_set$good_loan))
+glm.pred[glm.prob > 0.5] <- 1
+```
+
+```{r}
+accuracy(glm.pred, rb_cleaned_validation_set$good_loan)
+```
+
+```{r}
+rb_glm_pred <- glm.pred
+```
+
+```{python}
+log_loss(r.rb_cleaned_validation_set.good_loan, r.rb_glm_pred)
+```
+
+### The data needs to be cleaned to improve model performance
+- use datarobot to remove features with target leakage
+- remove outliers from the data
+
+
+```{r}
+# Target Leakage According to Datarobot
+# loan_status
+# last_fico_range_high
+# last_fico_range_low
+
+# Outliers & inliers 
+# pct_tl_nvr_dlq
+
+# Outliers According to Datarobot
+# total_rev_hi_lim
+# total_rec_late_fee
+# total_rec_int
+# total_il_high_credit_limit
+# total_bc_limit
+# total_bal_ex_mort
+# total_acc
+# tot_hi_cred_lim
+# tot_cur_bal
+# tot_coll_amt
+# tax_liens
+# settlement_percentage
+# settlement_amount
+# revol_bal
+# recoveries
+# pub_rec
+# pct_tl_nvr_dlq
+# open_acc
+# num_tl_op_past_12m
+# num_sats
+# num_rev_accts
+# num_op_rev_tl
+# num_il_tl
+# num_bc_tl
+# num_actv_bc_tl
+# mths_since_recent_bc
+# mo_sin_rcnt_tl
+# mo_sin_rcnt_rev_tl_op
+# mo_sin_old_rev_tl_op
+# mo_sin_old_il_acct
+# fico_range_low
+# fico_range_high
+# delinq_amnt
+# delinq_2yrs
+# collection_recovery_fee
+# bc_open_to_buy
+# avg_cur_bal
+# annual_inc
+
+target_leakage_columns <- c('loan_status', 'last_fico_range_high', 'last_fico_range_low')
+
+modified_outlier_columns <-  c('total_bal_ex_mort', 'total_acc', 'tot_hi_cred_lim', 'tot_cur_bal', 'tot_coll_amt', 'tax_liens', 'settlement_percentage', 'settlement_amount', 'revol_bal', 'recoveries', 'pub_rec', 'pct_tl_nvr_dlq', 'open_acc', 'num_tl_op_past_12m', 'num_sats', 'num_rev_accts', 'num_op_rev_tl', 'num_il_tl', 'num_bc_tl', 'num_actv_bc_tl', 'mths_since_recent_bc', 'mo_sin_rcnt_tl', 'mo_sin_rcnt_rev_tl_op', 'mo_sin_old_rev_tl_op', 'mo_sin_old_il_acct', 'fico_range_low', 'fico_range_high', 'delinq_amnt', 'delinq_2yrs', 'collection_recovery_fee', 'bc_open_to_buy', 'avg_cur_bal', 'annual_inc')
+
+# `total_rev_hi_lim`, `total_rec_late_fee`, `total_rec_int`, `total_il_high_credit_limit`, `total_bc_limit`, etc. don't exist.
+
+
+outlier_columns <- c('total_rev_hi_lim', 'total_rec_late_fee', 'total_rec_int', 'total_il_high_credit_limit', 'total_bc_limit', 'total_bal_ex_mort', 'total_acc', 'tot_hi_cred_lim', 'tot_cur_bal', 'tot_coll_amt', 'tax_liens', 'settlement_percentage', 'settlement_amount', 'revol_bal', 'recoveries', 'pub_rec', 'pct_tl_nvr_dlq', 'open_acc', 'num_tl_op_past_12m', 'num_sats', 'num_rev_accts', 'num_op_rev_tl', 'num_il_tl', 'num_bc_tl', 'num_actv_bc_tl', 'mths_since_recent_bc', 'mo_sin_rcnt_tl', 'mo_sin_rcnt_rev_tl_op', 'mo_sin_old_rev_tl_op', 'mo_sin_old_il_acct', 'fico_range_low', 'fico_range_high', 'delinq_amnt', 'delinq_2yrs', 'collection_recovery_fee', 'bc_open_to_buy', 'avg_cur_bal', 'annual_inc')
+```
+
+
+```{r}
+# Original Data for comparison
+original_train_data <- read.csv('./train_loans2013_2015q1_minimalprocessing.csv')
+original_test_data <- read.csv('./test_loans2013_2015q1_minimalprocessing.csv')
+```
+
+
+```{r}
+train_data_balanced_no_collinearity$last_fico_range_low
+# original_train_data$last_fico_range_high
+```
+
+```{r}
+outlier_columns
+```
+
+
+```{r}
+outlier_columns[outlier_columns %in% names(rb_cleaned_train)]
+```
+```{r}
+plot(rb_cleaned_train$avg_cur_bal)
+```
+
+```{r}
+# Identifying outliers and high-leverage values to increase model performance. 
+lm.fit <- lm(good_loan ~ ., data = rb_cleaned_train)
+```
+
+```{r}
+# Identify interactions with high p-values to increase model performance. 
+```
+
+```{r}
+
+```
+
+
 
 
